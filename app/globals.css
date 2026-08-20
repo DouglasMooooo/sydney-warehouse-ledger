@@ -58,5 +58,14 @@ th,td { padding:10px 8px; border-bottom:1px solid #edf1ef; white-space:nowrap; }
 .error-item { padding:10px 12px; color:var(--danger); background:#fff1f0; border-radius:8px; font-size:12px; }
 .warning-item { color:var(--warning); background:#fff7e8; }
 .coming-soon { max-width:720px; padding:35px; }
+.location-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:12px; }
+.location-card { min-height:150px; padding:16px; display:flex; flex-direction:column; gap:7px; }
+.location-card strong { color:var(--brand-dark); }
+.location-card span,.location-card small { overflow-wrap:anywhere; }
+.location-card b { margin-top:auto; padding-top:8px; border-top:1px solid var(--line); }
+.layout-zone { margin-bottom:24px; }
+.layout-zone h3 { margin:0 0 10px; }
+.empty-location { opacity:.72; }
+.metric-hint { margin:16px 0 0; color:var(--muted); font-size:12px; line-height:1.55; }
 @media (max-width:1050px) { .metric-grid{grid-template-columns:repeat(3,1fr)} .inventory-grid{grid-template-columns:repeat(3,1fr)} .workflow-grid,.section-grid{grid-template-columns:1fr} }
-@media (max-width:720px) { .app-shell{grid-template-columns:1fr} .sidebar{position:static;height:auto;padding:20px;gap:14px} .sidebar nav{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px;margin-top:2px} .sidebar nav a{padding:8px 4px;text-align:center;white-space:nowrap;font-size:12px} .system-chip,.sidebar-copy{display:none} .content-shell{padding:24px 16px 50px} .metric-grid,.inventory-grid{grid-template-columns:repeat(2,1fr)} .page-header{align-items:start;flex-direction:column} }
+@media (max-width:720px) { .app-shell{grid-template-columns:1fr} .sidebar{position:static;height:auto;padding:20px;gap:14px} .sidebar nav{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;margin-top:2px} .sidebar nav a{min-height:44px;padding:12px 6px;text-align:center;white-space:nowrap;font-size:12px} .system-chip,.sidebar-copy{display:none} .content-shell{padding:24px 16px 50px} .metric-grid,.inventory-grid{grid-template-columns:repeat(2,1fr)} .page-header{align-items:start;flex-direction:column} .workflow-grid{display:block}.preview-card{margin-top:16px}.primary-button{min-height:46px} }

@@ -2,6 +2,8 @@ import { LiveDashboardQueryService } from '../../../src/application/dashboardSer
 import type { DashboardSnapshot } from '../../../src/application/contracts';
 import { warehouseReadAdapterFromEnv } from '../../../src/feishu/warehouseReadAdapter';
 import { todayInSydney } from '../../../src/ledger/businessDate';
+import { resolveWarehouseAuthContext } from '../../../src/auth/authContext';
+import { requireWarehousePermission } from '../../../src/auth/permissions';
 
 export const dynamic = 'force-dynamic';
 
@@ -9,6 +11,8 @@ export default async function DashboardPage() {
   const today = todayInSydney();
   let snapshot: DashboardSnapshot | undefined;
   try {
+    const auth = resolveWarehouseAuthContext();
+    requireWarehousePermission(auth, 'DASHBOARD_READ');
     snapshot = await new LiveDashboardQueryService(warehouseReadAdapterFromEnv()).getSnapshot(today);
   } catch (error) {
     console.error('Dashboard source read failed', error);
@@ -44,10 +48,18 @@ function DashboardContent({ snapshot }: { snapshot: DashboardSnapshot }) {
       <section className="inventory-grid">{inventory.map(([label, value]) => <div className="card inventory-card" key={label}><span>{label}</span><strong>{value}</strong></div>)}</section>
       <div className="section-grid">
         <Section title="库存按机型"><DataTable headers={['Model', 'Condition', 'Available']} rows={snapshot.inventoryByModel.map((item) => [item.model, item.condition, item.availableQty])} /></Section>
+        <Section title="库存按库位"><DataTable headers={['Location', 'Available Qty']} rows={snapshot.inventoryByLocation.map((item) => [item.location, item.availableQty])} /></Section>
+        <Section title="库存按属性"><DataTable headers={['Condition', 'Available Qty']} rows={snapshot.inventoryByCondition.map((item) => [item.condition, item.availableQty])} /></Section>
+        <Section title="期间活动 · QTY"><DataTable headers={['Metric', 'Qty']} rows={[
+          ['本周发货', snapshot.activityBreakdowns.thisWeekShippedQty],
+          ['本周返修', snapshot.activityBreakdowns.thisWeekReturnedQty],
+          ['本月发货', snapshot.activityBreakdowns.thisMonthShippedQty],
+        ]} /></Section>
         <Section title="异常待处理"><DataTable headers={['Code', 'Count']} rows={snapshot.exceptions.map((item) => [item.code, item.count])} /></Section>
         <Section title="最近备货"><DataTable headers={['Date', 'Pickup', 'SH', 'SKU', 'Qty', 'Location']} rows={snapshot.recentPrepared.map((item) => [item.businessDate, item.pickupCode, item.sh, item.sku, item.qty, item.location])} /></Section>
         <Section title="最近返修"><DataTable headers={['Date', 'SKU', 'Qty', 'To Location']} rows={snapshot.recentReturns.map((item) => [item.businessDate, item.sku, item.qty, item.location])} /></Section>
       </div>
+      <p className="metric-hint">指标口径：今日备货=SH COUNT；待取货/今日已出库=TASK COUNT（Pickup 优先、SH 回退）；今日返修与库存/期间活动=QTY；异常=ISSUE COUNT；待备货=UNAVAILABLE。</p>
       <ul className="notes">{snapshot.notes.map((note) => <li key={note}>{note}</li>)}</ul>
     </>
   );

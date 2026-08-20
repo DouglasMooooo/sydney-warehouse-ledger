@@ -3,11 +3,15 @@ import { apiFailure, apiSuccess, clientSafeError, serverSafeErrorSummary } from 
 import { parseWorkOrderPreviewClientDto } from '../../../../../src/application/clientDtos';
 import { prepareWorkOrderPreview } from '../../../../../src/application/workOrderPreview';
 import { warehouseReadAdapterFromEnv } from '../../../../../src/feishu/warehouseReadAdapter';
+import { resolveWarehouseAuthContext } from '../../../../../src/auth/authContext';
+import { requireWarehousePermission } from '../../../../../src/auth/permissions';
 
 export const runtime = 'nodejs';
 
 export async function POST(request: Request) {
   try {
+    const auth = resolveWarehouseAuthContext();
+    requireWarehousePermission(auth, 'WORK_ORDER_PREVIEW');
     const dto = parseWorkOrderPreviewClientDto(await request.json());
     const preview = await prepareWorkOrderPreview(dto, warehouseReadAdapterFromEnv());
     if (preview.errors.length > 0) {
@@ -19,7 +23,9 @@ export async function POST(request: Request) {
     const safe = clientSafeError(error);
     console.error('Work order preview failed', serverSafeErrorSummary(error));
     return NextResponse.json(apiFailure(safe.code, safe.message, safe.field), {
-      status: safe.code === 'SYSTEM_READ_FAILED' ? 503 : 400,
+      status: safe.code === 'AUTHENTICATION_REQUIRED' ? 401
+        : safe.code === 'PERMISSION_DENIED' ? 403
+          : safe.code === 'SYSTEM_READ_FAILED' ? 503 : 400,
     });
   }
 }

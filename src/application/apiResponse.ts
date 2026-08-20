@@ -18,6 +18,12 @@ export function apiFailure(code: string, message: string, field?: string): ApiRe
 
 export function clientSafeError(error: unknown): ApiErrorContract {
   const message = error instanceof Error ? error.message : String(error);
+  if (hasErrorCode(error, 'AUTHENTICATION_REQUIRED')) {
+    return { code: 'AUTHENTICATION_REQUIRED', message: '需要有效的飞书身份。' };
+  }
+  if (hasErrorCode(error, 'PERMISSION_DENIED')) {
+    return { code: 'PERMISSION_DENIED', message: '当前用户无权执行此操作。' };
+  }
   if (message.includes('XLSX_NOT_SUPPORTED')) {
     return { code: 'XLSX_NOT_SUPPORTED', message: '当前仅支持文本原型，尚未启用 XLSX 上传。', field: 'sourceFileName' };
   }
@@ -26,6 +32,11 @@ export function clientSafeError(error: unknown): ApiErrorContract {
   }
   if (error instanceof TypeError) return { code: 'INVALID_REQUEST', message: '请求数据格式无效。' };
   return { code: 'SYSTEM_READ_FAILED', message: '系统读取失败，请联系管理员。' };
+}
+
+function hasErrorCode(error: unknown, code: string): boolean {
+  return typeof error === 'object' && error !== null && 'code' in error
+    && (error as { code?: unknown }).code === code;
 }
 
 /** Log only a bounded, redacted error summary; never serialize arbitrary objects or response bodies. */

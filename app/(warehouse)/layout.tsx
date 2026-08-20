@@ -1,7 +1,8 @@
 import Link from 'next/link';
 
 const navItems = [
-  ['/dashboard', 'Dashboard'], ['/work-orders', '工单 / 备货'], ['/returns', '旧机接收'],
+  ['/dashboard', 'Dashboard'], ['/tasks', '今日任务'], ['/warehouse-layout', '仓库布局'],
+  ['/exceptions', '异常'], ['/work-orders', '工单 / 备货'], ['/returns', '旧机接收'],
   ['/moves', '移库'], ['/adjustments', '库存调整'], ['/labels', 'Label'],
 ] as const;
 

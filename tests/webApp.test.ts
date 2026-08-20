@@ -26,7 +26,9 @@ class FakeReadPort implements WarehouseReadPort {
       businessDate: asOf,
       metrics: { todayPreparedWorkOrders: 1, awaitingPreparation: null, awaitingPickup: 2, shippedToday: 3, returnedToday: 1, exceptionCount: 0 },
       inventory: { newUnits: 4, repairedGood: 2, pendingRepair: 1, repairInventory: 3, scrapped: 0 },
-      inventoryByModel: [], recentPrepared: [], recentReturns: [], exceptions: [], notes: [],
+      inventoryByModel: [], inventoryByLocation: [], inventoryByCondition: [],
+      activityBreakdowns: { thisWeekShippedQty: 0, thisWeekReturnedQty: 0, thisMonthShippedQty: 0 },
+      metricGrains: {}, recentPrepared: [], recentReturns: [], exceptions: [], notes: [],
     };
   }
   async findProduct(sku: string) { return this.product?.sku === sku ? this.product : undefined; }
@@ -191,4 +193,28 @@ test('preview route exposes no raw Feishu write primitive or spreadsheet coordin
   ]) {
     assert.equal(existsSync(genericRoute), false, `${genericRoute} must never be exposed`);
   }
+});
+
+test('read and preview routes enforce explicit server permissions', () => {
+  const routes = {
+    'app/api/warehouse/dashboard/route.ts': 'DASHBOARD_READ',
+    'app/api/warehouse/tasks/route.ts': 'TASK_READ',
+    'app/api/warehouse/exceptions/route.ts': 'TASK_READ',
+    'app/api/warehouse/layout/route.ts': 'INVENTORY_READ',
+    'app/api/warehouse/work-orders/preview/route.ts': 'WORK_ORDER_PREVIEW',
+  };
+  for (const [path, permission] of Object.entries(routes)) {
+    const source = readFileSync(path, 'utf8');
+    assert(source.includes('requireWarehousePermission'));
+    assert(source.includes(`'${permission}'`));
+    assert(!source.includes('writeExplicitCells'));
+  }
+});
+
+test('XLSX decoder is server-only and the browser sends binary FormData to explicit preview API', () => {
+  const client = readFileSync('app/(warehouse)/work-orders/preview-client.tsx', 'utf8');
+  assert(client.includes("fetch('/api/warehouse/work-orders/preview'"));
+  assert(client.includes('new FormData()'));
+  assert(!client.includes('ExcelJS'));
+  assert(!client.includes('file.text()'));
 });

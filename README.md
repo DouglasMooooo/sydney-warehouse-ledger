@@ -6,21 +6,23 @@ The project deliberately keeps the current ledger as the system of record. It do
 
 ## Current stage
 
-Phase 1 safe foundation is implemented and verified against the production workbook.
+Phase 2 read-only warehouse operations is implemented and verified against the production workbook.
 
 - Strict TypeScript normalisation, controlled-value validation, protected-column guards, and typed write preparation are available for future workflows.
 - The read-only data-quality scanner emits privacy-safe JSON and Markdown reports.
 - Only the eight confirmed formula gaps were repaired: `H1653`, `I1653`, `AB1654:AC1656`.
 - Post-repair current-inventory, weekly, and monthly reconciliation passed with no KPI changes.
 - Business dates and operation-scoped optimistic concurrency have been hardened for future writes.
-- A thin Next.js Web App provides the navigation shell, live read-only Dashboard, and a clearly labelled Work Order Preview Prototype. The preview performs zero writes.
+- A thin Next.js Web App provides a live read-only Dashboard, Today Tasks, Warehouse Layout, Exceptions, and real server-side XLSX Work Order Preview. The preview performs zero writes.
 - Shared text/XLSX section detection now hardens the Replacement boundary against Faulty Unit and other recognised sections, including case, whitespace, and colon variants. Preview remains fail-closed.
-- Worksheet-matrix parsing is tested, but actual binary `.xlsx` upload remains disabled until a maintained decoder is implemented and verified.
+- Binary `.xlsx` uploads are decoded in memory on the server with size/type checks and feed the strict Replacement-only parser; Faulty Unit data remains isolated.
 - GitHub Actions runs the pure typecheck, unit-test, and production-build gates without Feishu credentials; the reviewed baseline workflow completed successfully.
 - The Feishu Mini App target keeps secrets, ledger access, and command capability on the server and introduces no second inventory database.
+- The live Warehouse Layout now shows actual SKU quantities at all 136 physical/master locations; its helper/layout totals reconcile to current inventory.
+- Read and preview routes enforce explicit permissions. Production still fails closed until real Feishu session binding is implemented.
 - No operational business writer has been activated.
 
-Return, Move, Adjustment, Label, warehouse-layout deployment, Today Task views, and AI write actions remain explicitly deferred.
+Return, Move, Adjustment, Label confirmation, real production authentication, and all AI/write actions remain explicitly deferred.
 
 ## Repository map
 
@@ -38,6 +40,8 @@ Return, Move, Adjustment, Label, warehouse-layout deployment, Today Task views, 
 - [`docs/REVIEW_FIX_ITERATION.md`](docs/REVIEW_FIX_ITERATION.md): review findings, exact fixes, Dashboard metric definitions, parser/XLSX limitations, tests, and remaining write blockers.
 - [`docs/PARSER_HARDENING.md`](docs/PARSER_HARDENING.md): shared section rules, adversarial coverage, fail-closed preview rules, and XLSX capability boundary.
 - [`docs/FEISHU_MINI_APP_TARGET.md`](docs/FEISHU_MINI_APP_TARGET.md): future Mini App architecture, server security boundary, identity/roles, compatibility findings, and release gates.
+- [`docs/PHASE_2_OPERATIONAL_READ.md`](docs/PHASE_2_OPERATIONAL_READ.md): read-only modules, layout deployment, metric grains, XLSX boundary, permissions, and known limitations.
+- [`reports/phase2-reconciliation.md`](reports/phase2-reconciliation.md): privacy-safe live layout and non-regression release gate.
 - Other files under `docs/`: standards, schema, workflows, quality rules, views, and AI-skill refactor plan.
 
 ## Development

@@ -11,7 +11,7 @@ export interface XlsxWorkbookData {
   sheets: XlsxWorksheetData[];
 }
 
-/** Binary decoding boundary for a future maintained local XLSX dependency. */
+/** Server-side binary decoding boundary. */
 export interface XlsxWorkbookReader {
   read(bytes: Uint8Array): Promise<XlsxWorkbookData>;
 }
@@ -31,7 +31,7 @@ export class XlsxWorkOrderParser implements WorkOrderParser<XlsxWorkOrderSource>
   }
 }
 
-/** Testable worksheet-matrix parser; production binary XLSX decoding is not wired in this iteration. */
+/** Testable worksheet-matrix parser shared by the server-side binary reader. */
 export function parseXlsxWorkbookData(workbook: XlsxWorkbookData, sourceFileName?: string): ParsedWorkOrder {
   const warnings: string[] = [];
   const replacementLines: ParsedReplacementLine[] = [];

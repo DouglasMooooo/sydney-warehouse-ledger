@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { assertRuntimeIdentityAllowed, createDevOnlyAuthContext } from '../src/auth/authContext.js';
-import { hasWarehousePermission } from '../src/auth/permissions.js';
+import { assertRuntimeIdentityAllowed, createDevOnlyAuthContext, resolveWarehouseAuthContext } from '../src/auth/authContext.js';
+import { hasWarehousePermission, requireWarehousePermission } from '../src/auth/permissions.js';
 
 test('READ_ONLY is limited to dashboard, inventory, and task reads', () => {
   assert.equal(hasWarehousePermission(['READ_ONLY'], 'DASHBOARD_READ'), true);
@@ -24,4 +24,10 @@ test('DEV_ONLY identity is explicit and forbidden in production', () => {
   assert.equal(context.identitySource, 'DEV_ONLY');
   assert.doesNotThrow(() => assertRuntimeIdentityAllowed(context, 'development'));
   assert.throws(() => assertRuntimeIdentityAllowed(context, 'production'), /DEV_ONLY_IDENTITY_FORBIDDEN/);
+  assert.throws(() => resolveWarehouseAuthContext('production'), /Feishu identity adapter is not configured/);
+});
+
+test('server boundary enforces permissions, not only UI visibility', () => {
+  assert.throws(() => requireWarehousePermission(createDevOnlyAuthContext(['READ_ONLY']), 'WORK_ORDER_PREVIEW'), /Permission required/);
+  assert.doesNotThrow(() => requireWarehousePermission(createDevOnlyAuthContext(['WAREHOUSE_OPERATOR']), 'WORK_ORDER_PREVIEW'));
 });

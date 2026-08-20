@@ -1,4 +1,5 @@
 import type { WarehouseRole } from './types.js';
+import type { WarehouseAuthContext } from './types.js';
 
 export const WAREHOUSE_PERMISSIONS = [
   'DASHBOARD_READ', 'INVENTORY_READ', 'TASK_READ',
@@ -26,4 +27,20 @@ export const ROLE_PERMISSIONS: Readonly<Record<WarehouseRole, readonly Warehouse
 
 export function hasWarehousePermission(roles: readonly WarehouseRole[], permission: WarehousePermission): boolean {
   return roles.some((role) => ROLE_PERMISSIONS[role].includes(permission));
+}
+
+export class WarehouseAuthorizationError extends Error {
+  readonly code = 'PERMISSION_DENIED';
+  constructor(readonly permission: WarehousePermission) {
+    super(`Permission required: ${permission}`);
+  }
+}
+
+export function requireWarehousePermission(
+  context: WarehouseAuthContext,
+  permission: WarehousePermission,
+): void {
+  if (!hasWarehousePermission(context.user.roles, permission)) {
+    throw new WarehouseAuthorizationError(permission);
+  }
 }

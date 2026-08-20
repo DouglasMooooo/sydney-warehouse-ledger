@@ -21,10 +21,13 @@ No second inventory database is planned. Domain validation, normalisation, concu
 
 The browser or Mini App client must never receive a Feishu app secret, tenant token, spreadsheet write credential, raw backend command capability, `lark-cli` access, ledger coordinates, or a generic write primitive. It sends business-shaped DTOs to same-origin, purpose-specific application endpoints and receives the standard `{ ok, data }` or `{ ok, error }` contract.
 
-The current explicit preview endpoint is `POST /api/warehouse/work-orders/prepare`; despite its historical route name, it performs preview only and has no write port. A later API cleanup may expose `POST /api/warehouse/work-orders/preview`. Intended endpoints are:
+The current explicit binary preview endpoint is `POST /api/warehouse/work-orders/preview`; the historical `/prepare` endpoint remains a text-preview compatibility alias. Both perform preview only and have no write port. Current endpoints are:
 
 - `GET /api/warehouse/dashboard`
 - `POST /api/warehouse/work-orders/preview`
+- `GET /api/warehouse/tasks`
+- `GET /api/warehouse/layout`
+- `GET /api/warehouse/exceptions`
 - future `POST /api/warehouse/work-orders/confirm`
 - future `POST /api/warehouse/returns/preview` and `/confirm`
 - future `POST /api/warehouse/moves/preview` and `/confirm`
@@ -46,10 +49,10 @@ Local development may construct a clearly marked `DEV_ONLY` identity. Runtime va
 | Area | Current finding | Deployment requirement |
 | --- | --- | --- |
 | Server runtime | Feishu access uses Node-only `child_process`, filesystem/path modules, and a locally authenticated `lark-cli`. | Use a long-running Node host with the CLI installed and authenticated, or later replace only the server adapter with official server-side OpenAPI. Do not deploy this adapter to Edge/serverless runtimes that lack those capabilities. |
-| File upload | The client uses browser `File.text()` for `.txt`, `.csv`, and `.md`. Binary `.xlsx` decoding is not implemented. | Keep `.xlsx` disabled until a maintained server decoder and end-to-end tests exist. |
+| File upload | The client uploads `.xlsx` bytes to an explicit Node server route; ExcelJS decodes in memory with a 5 MiB limit. | Keep decoding server-only and preview-only; do not persist or forward workbooks. |
 | Browser APIs | The UI depends on standard `fetch` and `File.text()` only. | Validate those APIs in the selected Feishu webview versions. |
 | URLs | Client requests are relative and same-origin; no production Feishu URL is bundled into client code. | Preserve same-origin routing or configure an explicit trusted API origin. |
-| Authentication | There is an identity interface and role policy, but no real Feishu session binding yet. | Verify Feishu launch identity server-side and establish a secure, short-lived session before enabling any confirm endpoint. |
+| Authentication | Every current page/API checks a permission. Development/test use `DEV_ONLY`; production rejects requests because real Feishu session binding is not configured. | Verify Feishu launch identity server-side and establish a secure, short-lived session before deployment or any confirm endpoint. |
 | Environment | Feishu workbook configuration remains in server environment variables and an authenticated CLI session. | Keep all secrets and tokens server-only; never use public/client-prefixed variables for credentials. |
 | Cookies/session | No production cookie or session implementation exists. | Add Secure, HttpOnly, SameSite-appropriate session handling and CSRF protection for mutations. |
 | CSP/embedding | No production CSP, `frame-ancestors`, or Feishu webview allowlist has been configured. | Choose the Feishu Mini App/H5 hosting mode, then set its approved domains and CSP without weakening the server boundary. |

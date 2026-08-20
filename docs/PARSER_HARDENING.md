@@ -28,7 +28,9 @@ The canonical parser can return multiple legitimate replacement lines. The curre
 
 The worksheet-matrix parser is implemented and tested independently of file decoding. It shares the text parser's section rules, preserves `sourceRow`, supports multiple Replacement rows, and warns on malformed rows.
 
-Actual binary `.xlsx` upload is not enabled. The browser prototype accepts text-based input only; it must not label a binary file as supported until a maintained server-side decoder is implemented and tested end to end. Parser capability is not the same as UI upload capability.
+Actual binary `.xlsx` upload is now enabled for preview only. The browser sends multipart bytes to the explicit server preview API; ExcelJS decodes the workbook in memory and passes worksheet matrices to the existing canonical parser. The route accepts only `.xlsx`, enforces a 5 MiB limit and ZIP signature, preserves source rows, and returns structured errors for malformed or unsupported input.
+
+The browser does not decode the workbook, and uploaded bytes are not persisted or sent to an external AI API. Multiple legitimate Replacement lines are previewed independently. This capability does not reserve a Pickup Code or enable a business write.
 
 ## Operational boundary
 

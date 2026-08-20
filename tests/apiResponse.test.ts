@@ -3,6 +3,8 @@ import test from 'node:test';
 import {
   apiFailure, apiSuccess, clientSafeError, serverSafeErrorSummary,
 } from '../src/application/apiResponse.js';
+import { WarehouseAuthenticationError } from '../src/auth/authContext.js';
+import { WarehouseAuthorizationError } from '../src/auth/permissions.js';
 
 test('API success and failure use the standard envelope', () => {
   assert.deepEqual(apiSuccess({ value: 1 }), { ok: true, data: { value: 1 } });
@@ -29,4 +31,13 @@ test('server error summary is bounded and redacts credential-shaped content', ()
   assert(!summary.message.includes('tenant-value'));
   assert(summary.message.includes('[REDACTED]'));
   assert(summary.message.length <= 500);
+});
+
+test('auth failures use safe structured client codes', () => {
+  assert.deepEqual(clientSafeError(new WarehouseAuthenticationError('internal detail')), {
+    code: 'AUTHENTICATION_REQUIRED', message: '需要有效的飞书身份。',
+  });
+  assert.deepEqual(clientSafeError(new WarehouseAuthorizationError('WORK_ORDER_PREVIEW')), {
+    code: 'PERMISSION_DENIED', message: '当前用户无权执行此操作。',
+  });
 });

@@ -1,73 +1,60 @@
 'use client';
 
-import { useState, type ChangeEvent, type FormEvent } from 'react';
+import { useState, type FormEvent } from 'react';
 import type { ApiResponse } from '../../../src/application/apiResponse';
-import type { WorkOrderPreview } from '../../../src/application/workOrderPreview';
+import type { WorkOrderBatchPreview } from '../../../src/application/workOrderBatchPreview';
 
 export function WorkOrderPreviewClient({ initialBusinessDate }: { initialBusinessDate: string }) {
   const [businessDate, setBusinessDate] = useState(initialBusinessDate);
-  const [sourceText, setSourceText] = useState('');
-  const [sourceFileName, setSourceFileName] = useState<string>();
-  const [preview, setPreview] = useState<WorkOrderPreview>();
+  const [file, setFile] = useState<File>();
+  const [preview, setPreview] = useState<WorkOrderBatchPreview>();
   const [systemError, setSystemError] = useState<string>();
   const [loading, setLoading] = useState(false);
 
-  async function onFile(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    setSourceFileName(file.name);
-    setSourceText(await file.text());
-  }
-
   async function submit(event: FormEvent) {
     event.preventDefault();
+    if (!file) return;
     setLoading(true); setSystemError(undefined); setPreview(undefined);
     try {
-      const response = await fetch('/api/warehouse/work-orders/prepare', {
-        method: 'POST', headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ businessDate, sourceText, ...(sourceFileName ? { sourceFileName } : {}) }),
-      });
-      const payload = await response.json() as ApiResponse<WorkOrderPreview>;
-      if (!response.ok || !payload.ok) {
+      const form = new FormData();
+      form.set('businessDate', businessDate);
+      form.set('file', file);
+      const response = await fetch('/api/warehouse/work-orders/preview', { method: 'POST', body: form });
+      const payload = await response.json() as ApiResponse<WorkOrderBatchPreview>;
+      if (!payload.ok) {
         const failure = payload.ok ? { code: 'SYSTEM_READ_FAILED', message: '系统读取失败' } : payload.error;
         throw new Error(`${failure.code} · ${failure.message}`);
       }
       setPreview(payload.data);
-    } catch (error) { setSystemError(String(error)); }
+    } catch (error) { setSystemError(error instanceof Error ? error.message : '系统读取失败'); }
     finally { setLoading(false); }
   }
 
-  return (
-    <div className="workflow-grid">
-      <form className="card form-card" onSubmit={submit}>
-        <div className="field"><label htmlFor="businessDate">Sydney Business Date</label><input id="businessDate" type="date" value={businessDate} onChange={(event) => setBusinessDate(event.target.value)} required /></div>
-        <div className="field"><label htmlFor="workOrderFile">Prototype text fixture (.txt/.csv/.md only)</label><input id="workOrderFile" type="file" accept=".txt,.csv,.md,text/plain,text/csv" onChange={onFile} /></div>
-        <div className="field"><label htmlFor="sourceText">Paste prototype work-order text</label><textarea id="sourceText" value={sourceText} onChange={(event) => setSourceText(event.target.value)} placeholder={'SH: SH-2608-xxxx\nFaulty Unit information\nSKU: BAD-xxx\nReplacement Unit information\nReplacement Unit: 97-xxx\nQty: 1\nERP Warehouse: 悉尼良品仓'} required /></div>
-        <button className="primary-button" disabled={loading}>{loading ? '读取当前飞书库存…' : '生成 Prepared 预览'}</button>
-      </form>
-      <section className="card preview-card">
-        <div className="preview-flow"><span>Upload Work Order</span><b>→</b><span>Parsed Replacement</span><b>→</b><span>Validation</span><b>→</b><span>Inventory</span><b>→</b><span>Prepared Preview</span></div>
-        {systemError && <div className="notice error">系统读取失败：{systemError}</div>}
-        {!preview && !systemError && <div className="empty-state">这是文本解析原型，不代表已支持生产 ERP XLSX。系统只读取明确的 Replacement 区段，不会把 Faulty Unit 当成 Replacement，也不会写入台账。</div>}
-        {preview && <PreviewResult preview={preview} />}
-      </section>
-    </div>
-  );
+  return <div className="workflow-grid">
+    <form className="card form-card" onSubmit={submit}>
+      <div className="field"><label htmlFor="businessDate">Sydney Business Date</label><input id="businessDate" type="date" value={businessDate} onChange={(event) => setBusinessDate(event.target.value)} required /></div>
+      <div className="field"><label htmlFor="workOrderFile">ERP Work Order (.xlsx · max 5 MiB)</label><input id="workOrderFile" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" onChange={(event) => setFile(event.target.files?.[0])} required /></div>
+      <button className="primary-button" disabled={loading || !file}>{loading ? '服务端解析并读取当前库存…' : '生成 Prepared 预览'}</button>
+      <p className="notes">文件只在服务端内存中解析，不会永久保存或发送给外部 AI。</p>
+    </form>
+    <section className="card preview-card">
+      <div className="preview-flow"><span>Upload XLSX</span><b>→</b><span>Server decode</span><b>→</b><span>Replacement only</span><b>→</b><span>Live inventory</span><b>→</b><span>Preview</span></div>
+      {systemError && <div className="notice error">{systemError}</div>}
+      {!preview && !systemError && <div className="empty-state">选择真实 ERP `.xlsx` 工单。Faulty Unit 内容不会进入 Replacement 预览；任何歧义都会阻止预览。</div>}
+      {preview && <BatchResult preview={preview} />}
+    </section>
+  </div>;
 }
 
-function PreviewResult({ preview }: { preview: WorkOrderPreview }) {
-  const row = preview.proposedPreparedRow;
-  const items = row ? [
-    ['SH', row.sh], ['Pickup', `${row.pickupCode} · Preview only`], ['SKU', row.sku], ['Model', row.model],
-    ['Qty', row.qty], ['ERP Warehouse', row.erpWarehouse], ['Recommended Pick', `${row.fromLocation}${row.container ? ` / ${row.container}` : ''}`],
-    ['Available', preview.recommendation?.availableQty ?? '—'], ['Condition', row.stockCondition], ['Date', row.date],
-  ] : Object.entries(preview.extracted);
-  return (
-    <>
-      {preview.errors.length > 0 && <div className="error-list">{preview.errors.map((error) => <div className="error-item" key={`${error.code}-${error.message}`}><strong>{error.code}</strong> · {error.message}</div>)}</div>}
-      <div className="data-list">{items.map(([label, value]) => <div className="data-item" key={label}><span>{label}</span><strong>{String(value ?? '—')}</strong></div>)}</div>
-      {preview.warnings.map((warning) => <div className="error-item warning-item" key={warning}>{warning}</div>)}
-      <button className="confirm-button" disabled>Confirm Prepared · 下一阶段启用</button>
-    </>
-  );
+function BatchResult({ preview }: { preview: WorkOrderBatchPreview }) {
+  return <>
+    <div className="data-item"><span>SH</span><strong>{preview.sh ?? '—'}</strong></div>
+    {preview.errors.length > 0 && <div className="error-list">{preview.errors.map((error, index) => <div className="error-item" key={`${error.code}-${index}`}><strong>{error.code}</strong> · {error.message}</div>)}</div>}
+    {preview.lines.length > 0 && <div className="table-wrap"><table><thead><tr><th>Source row</th><th>SKU</th><th>Model</th><th>Qty</th><th>ERP Warehouse</th><th>Condition</th><th>Recommended</th><th>Container</th><th>Available</th><th>Pickup preview</th></tr></thead><tbody>{preview.lines.map(({ sourceRow, preview: line }, index) => {
+      const row = line.proposedPreparedRow;
+      return <tr key={`${sourceRow ?? index}-${row?.sku ?? index}`}><td>{sourceRow ?? '—'}</td><td>{row?.sku ?? line.extracted.replacementSku ?? '—'}</td><td>{row?.model ?? '—'}</td><td>{row?.qty ?? line.extracted.qty ?? '—'}</td><td>{row?.erpWarehouse ?? line.extracted.erpWarehouse ?? '—'}</td><td>{row?.stockCondition ?? '—'}</td><td>{row?.fromLocation ?? '—'}</td><td>{row?.container ?? '—'}</td><td>{line.recommendation?.availableQty ?? '—'}</td><td>{line.pickupCode ? `${line.pickupCode.value} · UNRESERVED` : '—'}</td></tr>;
+    })}</tbody></table></div>}
+    {preview.warnings.map((warning) => <div className="error-item warning-item" key={warning}>{warning}</div>)}
+    <button className="confirm-button" disabled>Confirm Prepared · Phase 3 才会启用</button>
+  </>;
 }

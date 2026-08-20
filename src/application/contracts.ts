@@ -58,6 +58,14 @@ export interface DashboardSnapshot {
     scrapped: number;
   };
   inventoryByModel: Array<{ model: string; condition: string; availableQty: number }>;
+  inventoryByLocation: Array<{ location: string; availableQty: number }>;
+  inventoryByCondition: Array<{ condition: string; availableQty: number }>;
+  activityBreakdowns: {
+    thisWeekShippedQty: number;
+    thisWeekReturnedQty: number;
+    thisMonthShippedQty: number;
+  };
+  metricGrains: Record<string, 'QTY' | 'TASK_COUNT' | 'SH_COUNT' | 'PICKUP_COUNT' | 'ROW_COUNT' | 'ISSUE_COUNT' | 'UNAVAILABLE'>;
   recentPrepared: Array<{ businessDate: string; sh: string; sku: string; qty: number | null; location: string; pickupCode: string }>;
   recentReturns: Array<{ businessDate: string; sku: string; qty: number | null; location: string }>;
   exceptions: Array<{ code: string; count: number }>;

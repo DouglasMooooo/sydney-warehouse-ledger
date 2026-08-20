@@ -1,9 +1,14 @@
-import { ACTIONS, STOCK_CONDITIONS, type StockCondition } from '../config/controlledValues.js';
+import { STOCK_CONDITIONS, type StockCondition } from '../config/controlledValues.js';
 import type { BusinessDate } from '../ledger/businessDate.js';
 import type {
   DashboardSnapshot, InventoryCandidate, ProductRecord, WarehouseReadPort,
 } from '../application/contracts.js';
-import { deriveAwaitingPickupTasks, type DashboardLedgerActivity } from '../application/dashboardMetrics.js';
+import { deriveTodayTasks, type OperationalLedgerRow, type TodayTaskSnapshot } from '../application/todayTasks.js';
+import { formatLocationSummary, summarizeLocations, type LocationInventoryRecord, type LocationSummary } from '../application/locationSummary.js';
+import {
+  deriveLedgerExceptions, detectContainerMismatches, inventoryIssuesToOperationalExceptions,
+  OPERATIONAL_EXCEPTION_CODES, type OperationalException,
+} from '../application/exceptionService.js';
 import { requiredEnv } from './client.js';
 import { readTypedTable } from './read.js';
 import type { TypedSheetData } from './types.js';
@@ -32,14 +37,24 @@ export class FeishuWarehouseReadAdapter implements WarehouseReadPort {
     const prepared = mainRows.filter((row) => text(row[MAIN.action]) === '备货');
     const returns = mainRows.filter((row) => text(row[MAIN.action]) === '退回维修');
     const shipped = mainRows.filter((row) => text(row[MAIN.action]) === '出库');
-    const exceptionCounts = businessExceptionCounts(mainRows);
-    if (inventoryModel.missingQty > 0) exceptionCounts.set('MISSING_INVENTORY_QTY', inventoryModel.missingQty);
-    if (inventoryModel.invalidQty > 0) exceptionCounts.set('INVALID_INVENTORY_QTY', inventoryModel.invalidQty);
-    const activities = mainRows.map(toDashboardActivity);
+    const operationalRows = mainRows.map((row, index) => toOperationalLedgerRow(row, index + 2));
+    const tasks = deriveTodayTasks(operationalRows, asOf);
+    const rawInventory = rawInventoryRecords(inventory);
+    const inventorySummary = summarizeLocations(rawInventory);
+    const validLocations = this.readValidLocations();
+    const dashboardExceptions = [
+      ...deriveLedgerExceptions(operationalRows, validLocations),
+      ...inventoryIssuesToOperationalExceptions(inventorySummary.issues),
+      ...detectContainerMismatches(rawInventory),
+    ];
+    const exceptionCounts = new Map<string, number>();
+    for (const item of dashboardExceptions) exceptionCounts.set(item.code, (exceptionCounts.get(item.code) ?? 0) + 1);
     const byModel = new Map<string, number>();
+    const byLocation = new Map<string, number>();
     for (const item of inventoryRows) {
       const key = `${item.model}\u0000${item.condition}`;
       byModel.set(key, (byModel.get(key) ?? 0) + item.availableQty);
+      byLocation.set(item.location, (byLocation.get(item.location) ?? 0) + item.availableQty);
     }
     const conditionTotal = (condition: StockCondition) => inventoryRows
       .filter((item) => item.condition === condition)
@@ -52,9 +67,9 @@ export class FeishuWarehouseReadAdapter implements WarehouseReadPort {
       metrics: {
         todayPreparedWorkOrders: new Set(prepared.filter((row) => businessDate(row[MAIN.date]) === asOf).map((row) => text(row[MAIN.sh])).filter(Boolean)).size,
         awaitingPreparation: null,
-        awaitingPickup: deriveAwaitingPickupTasks(activities),
-        shippedToday: shipped.filter((row) => businessDate(row[MAIN.outboundDate]) === asOf).length,
-        returnedToday: returns.filter((row) => businessDate(row[MAIN.date]) === asOf).length,
+        awaitingPickup: tasks.awaitingPickup.length,
+        shippedToday: tasks.todayOutbound.length,
+        returnedToday: tasks.todayReturns.reduce((sum, task) => sum + task.details.reduce((qty, detail) => qty + (detail.qty ?? 0), 0), 0),
         exceptionCount: [...exceptionCounts.values()].reduce((sum, count) => sum + count, 0),
       },
       inventory: {
@@ -71,6 +86,22 @@ export class FeishuWarehouseReadAdapter implements WarehouseReadPort {
         })
         .sort((left, right) => right.availableQty - left.availableQty || left.model.localeCompare(right.model))
         .slice(0, 12),
+      inventoryByLocation: [...byLocation.entries()]
+        .map(([location, availableQty]) => ({ location, availableQty }))
+        .sort((left, right) => right.availableQty - left.availableQty || left.location.localeCompare(right.location)),
+      inventoryByCondition: STOCK_CONDITIONS.map((condition) => ({ condition, availableQty: conditionTotal(condition) })),
+      activityBreakdowns: {
+        thisWeekShippedQty: qtyForPeriod(shipped, MAIN.outboundDate, asOf, 'week'),
+        thisWeekReturnedQty: qtyForPeriod(returns, MAIN.date, asOf, 'week'),
+        thisMonthShippedQty: qtyForPeriod(shipped, MAIN.outboundDate, asOf, 'month'),
+      },
+      metricGrains: {
+        todayPreparedWorkOrders: 'SH_COUNT', awaitingPreparation: 'UNAVAILABLE',
+        awaitingPickup: 'TASK_COUNT', shippedToday: 'TASK_COUNT', returnedToday: 'QTY',
+        exceptionCount: 'ISSUE_COUNT', newUnits: 'QTY', repairedGood: 'QTY',
+        pendingRepair: 'QTY', repairInventory: 'QTY', scrapped: 'QTY',
+        thisWeekShipped: 'QTY', thisWeekReturned: 'QTY', thisMonthShipped: 'QTY',
+      },
       recentPrepared: prepared.slice(-6).reverse().map((row) => ({
         businessDate: businessDate(row[MAIN.date]),
         sh: text(row[MAIN.sh]),
@@ -120,6 +151,41 @@ export class FeishuWarehouseReadAdapter implements WarehouseReadPort {
     return this.readMain().data.slice(1).map((row) => text(row[MAIN.pickup])).filter(Boolean);
   }
 
+  readTodayTasks(asOf: BusinessDate): TodayTaskSnapshot {
+    const rows = this.readMain().data.slice(1)
+      .filter((row) => text(row[MAIN.action]))
+      .map((row, index) => toOperationalLedgerRow(row, index + 2));
+    return deriveTodayTasks(rows, asOf);
+  }
+
+  readLocationSummaries(): { locations: Array<LocationSummary & { displayText: string }>; issues: ReturnType<typeof summarizeLocations>['issues'] } {
+    const result = summarizeLocations(rawInventoryRecords(this.readInventory()));
+    const byLocation = new Map(result.summaries.map((summary) => [summary.location, summary]));
+    const locations = [...this.readValidLocations()].sort((left, right) => left.localeCompare(right));
+    return {
+      locations: locations.map((location) => {
+        const summary = byLocation.get(location) ?? { location, totalQty: 0, skuLines: [], containers: [] };
+        return { ...summary, displayText: formatLocationSummary(location, summary) };
+      }),
+      issues: result.issues,
+    };
+  }
+
+  readOperationalExceptions(): { exceptions: OperationalException[]; supportedCodes: readonly string[] } {
+    const main = this.readMain();
+    const inventory = rawInventoryRecords(this.readInventory());
+    const rows = main.data.slice(1).filter((row) => text(row[MAIN.action]))
+      .map((row, index) => toOperationalLedgerRow(row, index + 2));
+    const summary = summarizeLocations(inventory);
+    const validLocations = this.readValidLocations();
+    const exceptions = [
+      ...deriveLedgerExceptions(rows, validLocations),
+      ...inventoryIssuesToOperationalExceptions(summary.issues),
+      ...detectContainerMismatches(inventory),
+    ];
+    return { exceptions, supportedCodes: OPERATIONAL_EXCEPTION_CODES };
+  }
+
   private readMain(): TypedSheetData {
     return readTypedTable({
       spreadsheetUrl: this.config.spreadsheetUrl,
@@ -133,6 +199,12 @@ export class FeishuWarehouseReadAdapter implements WarehouseReadPort {
       spreadsheetUrl: this.config.spreadsheetUrl,
       sheetId: this.config.currentInventorySheetId,
     });
+  }
+
+  private readValidLocations(): Set<string> {
+    const table = readTypedTable({ spreadsheetUrl: this.config.spreadsheetUrl, sheetName: '库位维护' });
+    const location = columnIndex(table, ['库位编码（R-排-列-L/M/R）', '库位编码', 'Location']);
+    return new Set(table.data.map((row) => text(row[location])).filter(Boolean));
   }
 }
 
@@ -149,7 +221,7 @@ export function parseInventoryRecords(table: TypedSheetData): { records: Invento
   const model = columnIndex(table, ['Model', '机型', '型号']);
   const location = columnIndex(table, ['Location', '库位', '当前库位']);
   const container = optionalColumnIndex(table, ['Container', '容器', '容器码']);
-  const available = columnIndex(table, ['Available Qty', '可用数量', '可用库存', '可用Qty']);
+  const available = columnIndex(table, ['Available Qty', '可用数量', '可用库存', '可用Qty', '当前数量']);
   const condition = columnIndex(table, ['Stock Condition', '库存属性', '属性']);
   const records: InventoryCandidate[] = [];
   let missingQty = 0;
@@ -178,24 +250,6 @@ export function parseInventoryRecords(table: TypedSheetData): { records: Invento
     records.push(item);
   }
   return { records, missingQty, invalidQty };
-}
-
-function businessExceptionCounts(rows: TypedSheetData['data']): Map<string, number> {
-  const counts = new Map<string, number>();
-  const add = (code: string) => counts.set(code, (counts.get(code) ?? 0) + 1);
-  for (const row of rows) {
-    const action = text(row[MAIN.action]);
-    const qty = row[MAIN.qty];
-    const condition = text(row[MAIN.stockCondition]);
-    if (!ACTIONS.includes(action as (typeof ACTIONS)[number])) add('INVALID_ACTION');
-    if (typeof qty !== 'number' || !Number.isFinite(qty) || qty <= 0) add('INVALID_QTY');
-    if (!STOCK_CONDITIONS.includes(condition as StockCondition)) add('INVALID_STOCK_CONDITION');
-    if (action !== '退回维修' && !text(row[MAIN.sku])) add('MISSING_SKU');
-    if (action === '备货' && !text(row[MAIN.fromLocation])) add('PREPARED_WITHOUT_SOURCE_LOCATION');
-    if (action === '备货' && !text(row[MAIN.pickup])) add('PREPARED_WITHOUT_PICKUP_CODE');
-    if (action === '退回维修' && !text(row[MAIN.sn])) add('MISSING_SN');
-  }
-  return counts;
 }
 
 function columnIndex(table: TypedSheetData, aliases: string[]): number {
@@ -227,15 +281,60 @@ function businessDate(value: unknown): string {
   return text(value).slice(0, 10);
 }
 
-function toDashboardActivity(row: TypedSheetData['data'][number]): DashboardLedgerActivity {
+function toOperationalLedgerRow(row: TypedSheetData['data'][number], ledgerRow: number): OperationalLedgerRow {
   const qty = parseSourceNumber(row[MAIN.qty]);
-  const activity: DashboardLedgerActivity = {
-    action: text(row[MAIN.action]),
-    sh: text(row[MAIN.sh]),
-    pickupCode: text(row[MAIN.pickup]),
-    sku: text(row[MAIN.sku]),
-    outboundDate: text(row[MAIN.outboundDate]),
+  return {
+    ledgerRow,
+    date: businessDate(row[MAIN.date]), outboundDate: businessDate(row[MAIN.outboundDate]),
+    action: text(row[MAIN.action]), sh: text(row[MAIN.sh]), pickupCode: text(row[MAIN.pickup]),
+    sku: text(row[MAIN.sku]), model: text(row[MAIN.model]),
+    ...(qty.kind === 'valid' ? { qty: qty.value } : {}),
+    erpWarehouse: text(row[MAIN.erpWarehouse]), fromLocation: text(row[MAIN.fromLocation]),
+    toLocation: text(row[MAIN.toLocation]), container: text(row[MAIN.container]),
+    sn: text(row[MAIN.sn]), stockCondition: text(row[MAIN.stockCondition]),
   };
-  if (qty.kind === 'valid') activity.qty = qty.value;
-  return activity;
+}
+
+function rawInventoryRecords(table: TypedSheetData): Array<LocationInventoryRecord & { sourceRow?: number }> {
+  const sourceRow = optionalColumnIndex(table, ['来源行']);
+  const location = columnIndex(table, ['Location', '库位', '当前库位', '库位编码']);
+  const container = optionalColumnIndex(table, ['Container', '容器', '容器码']);
+  const sku = columnIndex(table, ['SKU', '料号', '物料号', '产品料号']);
+  const qty = columnIndex(table, ['Available Qty', '可用数量', '可用库存', '可用Qty', '当前数量']);
+  const records: Array<LocationInventoryRecord & { sourceRow?: number }> = [];
+  for (const row of table.data) {
+    const locationValue = text(row[location]);
+    const skuValue = text(row[sku]);
+    const qtyValue = row[qty];
+    if (!locationValue && !skuValue && (qtyValue === null || qtyValue === '')) continue;
+    const record: LocationInventoryRecord & { sourceRow?: number } = {
+      location: locationValue, sku: skuValue, qty: qtyValue,
+    };
+    const containerValue = container === undefined ? '' : text(row[container]);
+    if (containerValue) record.container = containerValue;
+    const source = sourceRow === undefined ? undefined : Number(row[sourceRow]);
+    if (source !== undefined && Number.isInteger(source) && source > 0) record.sourceRow = source;
+    records.push(record);
+  }
+  return records;
+}
+
+function qtyForPeriod(
+  rows: TypedSheetData['data'], dateColumn: number, asOf: BusinessDate, period: 'week' | 'month',
+): number {
+  const start = period === 'month' ? `${asOf.slice(0, 7)}-01` : mondayOf(asOf);
+  return rows.filter((row) => {
+    const date = businessDate(row[dateColumn]);
+    return date >= start && date <= asOf;
+  }).reduce((sum, row) => {
+    const qty = parseSourceNumber(row[MAIN.qty]);
+    return sum + (qty.kind === 'valid' ? qty.value : 0);
+  }, 0);
+}
+
+function mondayOf(date: BusinessDate): string {
+  const value = new Date(`${date}T00:00:00Z`);
+  const day = value.getUTCDay() || 7;
+  value.setUTCDate(value.getUTCDate() - day + 1);
+  return value.toISOString().slice(0, 10);
 }
