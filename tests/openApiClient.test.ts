@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { FeishuOpenApiClient, FeishuOpenApiError } from '../src/feishu/openApiClient.js';
+import { FeishuOpenApiClient, FeishuOpenApiError, tokenRefreshAt } from '../src/feishu/openApiClient.js';
 import { FeishuOpenApiWarehouseSheetReader } from '../src/feishu/sheetReader.js';
 
 test('tenant token is server-cached, refreshed before expiry, and never appears in errors', async () => {
@@ -42,4 +42,13 @@ test('OpenAPI sheet reader preserves numeric values and produces the same typed 
   assert.deepEqual(table.data, [['00123', 2, 'R1']]);
   assert.equal(table.dtypes['Available Qty'], 'number');
   assert.equal(table.dtypes.SKU, 'string');
+});
+
+test('token refresh boundary is strictly before expiry for long and short TTLs', () => {
+  const acquiredAt = 10_000;
+  for (const ttl of [7200, 600, 120, 30]) {
+    const refreshAt = tokenRefreshAt(acquiredAt, ttl);
+    assert(refreshAt > acquiredAt, `TTL ${ttl} must have a positive cache window`);
+    assert(refreshAt < acquiredAt + ttl * 1000, `TTL ${ttl} must refresh before expiry`);
+  }
 });

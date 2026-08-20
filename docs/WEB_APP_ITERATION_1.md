@@ -5,7 +5,7 @@
 - Responsive internal app shell and navigation for Dashboard, Work Order / Prepared, Return to Repair, Move, Adjustment, and Label.
 - `/dashboard`: server-rendered, read-only view of live main-ledger and current-inventory sources. It does not cache or create shadow status/inventory data.
 - `/work-orders`: upload/paste input and a `PREVIEW_ONLY` Prepared workflow.
-- `/api/warehouse/work-orders/prepare`: strict allowlisted DTO parsing and business-shaped preview response.
+- `/api/warehouse/work-orders/prepare`: historical preview alias removed in Phase 2.6 so the only UAT work-order POST is the explicit XLSX `/preview` endpoint.
 - `/returns`, `/moves`, `/adjustments`, and `/labels`: explicit “coming soon” pages only.
 
 ## Prepared preview rules

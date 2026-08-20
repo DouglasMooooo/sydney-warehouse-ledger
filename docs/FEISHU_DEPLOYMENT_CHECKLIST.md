@@ -1,12 +1,14 @@
 # Feishu Internal H5 Read-Only Deployment Checklist
 
+Project-specific values and paths are in `FEISHU_UAT_CONFIGURATION.md`; that document is authoritative for Phase 2.6.
+
 ## Feishu console
 
 - [ ] Create/select the Sydney Warehouse internal app and choose an H5/web application entry.
 - [ ] Configure the exact HTTPS web domain and launch URL.
 - [ ] Register the exact OAuth callback URL used by `FEISHU_OAUTH_REDIRECT_URI`; do not use wildcards.
 - [ ] Enable user identity/login capability and approve the minimum user identity scopes required by the OAuth user-info endpoint.
-- [ ] Grant the minimum spreadsheet read scope (for example `sheets:spreadsheet:readonly`) required by the official range-read API.
+- [ ] Grant the minimum read-only set for the exact calls: `sheets:spreadsheet:read` (metadata/query) and `sheets:spreadsheet:readonly` (v2 range read), then remove any scope proven redundant. Grant no spreadsheet write scope.
 - [ ] Add the internal app/tenant identity to the warehouse spreadsheet with read access. API scope alone does not grant document access.
 - [ ] Publish the app version to the intended UAT users only.
 
@@ -36,7 +38,7 @@
 - [ ] Verify WAREHOUSE_OPERATOR can run preview and receives no raw token, sheet ID, formula, or workbook dump.
 - [ ] Verify Dashboard, Today Tasks, Warehouse Layout, live Exceptions, explicit Deep Scan, and XLSX Preview against the authorized ledger.
 - [ ] Confirm `只读试运行` is visible and Return/Move/Adjustment/Label controls are absent.
-- [ ] Confirm `/api/health` reports ledger/auth `ok`, mode `read-only`, and `readOnlyRelease: true` without identifiers.
+- [ ] Confirm `/api/health` reports mode `READ_ONLY_UAT` and separate `authConfig`, `openApiConfig`, and `ledgerRead` statuses without identifiers.
 - [ ] Run `npm run test:work-orders-private`; collect at least 20 historical fixtures if available and keep all files/results private.
 - [ ] Confirm request logs contain only approved fields.
 - [ ] Confirm production business writes remain 0.
@@ -46,4 +48,4 @@
 - [ ] Run `npm ci`, `npm run typecheck`, `npm test`, and `npm run build` from the exact release commit.
 - [ ] Record the Git commit and successful CI run in the release gate.
 - [ ] Retain an immediate rollback deployment and a way to remove the app version from UAT users.
-- [ ] Do not add a confirm/write route under Phase 2.5. Phase 3 needs a separate review and approval.
+- [ ] Do not add a confirm/write route under Phase 2.6. Phase 3 needs a separate review and approval.

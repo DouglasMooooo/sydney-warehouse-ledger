@@ -2,21 +2,25 @@ import { DEEP_QUALITY_EXCEPTION_CODES, qualityIssueToOperationalException, type 
 import { cellsByAddress, readRange } from '../feishu/read.js';
 import { openApiClientFromEnv, type FeishuOpenApiClient } from '../feishu/openApiClient.js';
 import type { FeishuCell } from '../feishu/types.js';
-import type { LedgerScanRow, QualityCode } from '../quality/types.js';
+import type { LedgerScanRow } from '../quality/types.js';
 import { scanLedger } from '../quality/scanLedger.js';
 import { warehouseSheetReaderFromEnv } from '../feishu/sheetReader.js';
 
 export interface DeepQualitySource {
   readLedgerRows(): Promise<LedgerScanRow[]>;
   readValidLocations(): Promise<Set<string>>;
+  ruleCoverage?(): DeepRuleCoverage[];
 }
+
+export type DeepRuleCoverageStatus = 'FULL' | 'PARTIAL' | 'UNAVAILABLE';
+export interface DeepRuleCoverage { code: string; status: DeepRuleCoverageStatus; limitation?: string }
 
 export interface DeepQualityScanResult {
   status: 'completed';
   scannedAt: string;
   scannedRows: number;
   issueCount: number;
-  ruleCoverage: Array<{ code: string; executed: true }>;
+  ruleCoverage: DeepRuleCoverage[];
   exceptions: OperationalException[];
 }
 
@@ -27,10 +31,12 @@ export async function runDeepQualityScan(
   const [rows, locations] = await Promise.all([source.readLedgerRows(), source.readValidLocations()]);
   const report = scanLedger(rows, locations);
   const deepCodes = new Set<string>(DEEP_QUALITY_EXCEPTION_CODES);
-  const exceptions = report.issues.filter((issue) => deepCodes.has(issue.code)).map(qualityIssueToOperationalException);
+  const coverage = source.ruleCoverage?.() ?? DEEP_QUALITY_EXCEPTION_CODES.map((code) => ({ code, status: 'FULL' as const }));
+  const availableCodes = new Set(coverage.filter((item) => item.status !== 'UNAVAILABLE').map((item) => item.code));
+  const exceptions = report.issues.filter((issue) => deepCodes.has(issue.code) && availableCodes.has(issue.code)).map(qualityIssueToOperationalException);
   return {
     status: 'completed', scannedAt: now.toISOString(), scannedRows: rows.length, issueCount: exceptions.length,
-    ruleCoverage: DEEP_QUALITY_EXCEPTION_CODES.map((code) => ({ code, executed: true as const })), exceptions,
+    ruleCoverage: coverage, exceptions,
   };
 }
 
@@ -81,6 +87,15 @@ export class OpenApiDeepQualitySource implements DeepQualitySource {
     const table = await warehouseSheetReaderFromEnv().readTable({ sheetName: '库位维护' });
     const index = table.columns.findIndex((column) => /库位编码|location/i.test(column));
     return new Set(table.data.map((row) => String(row[index] ?? '').trim()).filter(Boolean));
+  }
+  ruleCoverage(): DeepRuleCoverage[] {
+    return [
+      { code: 'DATE_STORED_AS_TEXT', status: 'PARTIAL', limitation: 'UnformattedValue distinguishes number from text but does not expose authoritative stored cell metadata or number format.' },
+      { code: 'HIDDEN_CHARACTER', status: 'FULL' },
+      { code: 'FORMULA_MISSING', status: 'PARTIAL', limitation: 'Formula rendering is implemented but remains partial until representative protected columns are validated against the live UAT ledger.' },
+      { code: 'FORMULA_BROKEN', status: 'PARTIAL', limitation: 'Formula/value dual reads are available; live UAT transport semantics remain to be evidenced.' },
+      { code: 'VALIDATION_NOT_OK', status: 'UNAVAILABLE', limitation: 'The OpenAPI range read does not retrieve data-validation metadata; this rule is not reported as authoritative.' },
+    ];
   }
   private async matrix(range: string, render: 'UnformattedValue' | 'Formula'): Promise<unknown[][]> {
     const data = await this.client.get<{ valueRange?: { values?: unknown[][] } }>(

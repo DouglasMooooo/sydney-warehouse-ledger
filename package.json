@@ -14,7 +14,8 @@
     "formula:apply": "tsx src/scripts/applyFormulaRepair.ts",
     "reconcile": "tsx src/scripts/reconcile.ts",
     "test:feishu-date": "tsx src/scripts/verifyDateWrite.ts",
-    "test:work-orders-private": "tsx src/scripts/testPrivateWorkOrders.ts"
+    "test:work-orders-private": "tsx src/scripts/testPrivateWorkOrders.ts",
+    "uat:openapi-parity": "tsx src/scripts/validateOpenApiParity.ts"
   },
   "devDependencies": {
     "@types/node": "^24.3.0",

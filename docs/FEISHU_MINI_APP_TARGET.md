@@ -21,7 +21,7 @@ No second inventory database is planned. Domain validation, normalisation, concu
 
 The browser or Mini App client must never receive a Feishu app secret, tenant token, spreadsheet write credential, raw backend command capability, `lark-cli` access, ledger coordinates, or a generic write primitive. It sends business-shaped DTOs to same-origin, purpose-specific application endpoints and receives the standard `{ ok, data }` or `{ ok, error }` contract.
 
-The current explicit binary preview endpoint is `POST /api/warehouse/work-orders/preview`; the historical `/prepare` endpoint remains a text-preview compatibility alias. Both perform preview only and have no write port. Current endpoints are:
+The current explicit binary preview endpoint is `POST /api/warehouse/work-orders/preview`; the historical `/prepare` compatibility alias was removed for the Phase 2.6 route allowlist. The preview performs zero writes and has no write port. Current endpoints are:
 
 - `GET /api/warehouse/dashboard`
 - `POST /api/warehouse/work-orders/preview`

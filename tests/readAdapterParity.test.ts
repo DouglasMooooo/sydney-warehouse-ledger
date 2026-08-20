@@ -5,6 +5,7 @@ import { FeishuWarehouseReadAdapter } from '../src/feishu/warehouseReadAdapter.j
 import type { WarehouseSheetReader } from '../src/feishu/sheetReader.js';
 import type { TypedSheetData } from '../src/feishu/types.js';
 import { parseBusinessDateString } from '../src/ledger/businessDate.js';
+import { compareOpenApiLogicalReads } from '../src/uat/openApiParity.js';
 
 const mainHeader = Array.from({ length: 16 }, (_, index) => `C${index + 1}`);
 const mainRow: Array<string | number | boolean | null> = Array(16).fill('');
@@ -43,6 +44,10 @@ test('lark-cli and OpenAPI transport boundaries produce identical logical wareho
   ];
   const results = await Promise.all(operations.map((operation) => operation()));
   for (let index = 0; index < results.length; index += 2) assert.deepEqual(results[index], results[index + 1]);
+  const privacySafe = await compareOpenApiLogicalReads(local, hosted, date, '00123');
+  assert.equal(privacySafe.status, 'PASS');
+  assert(privacySafe.checks.every((item) => item.status === 'PASS'));
+  assert(!JSON.stringify(privacySafe).includes('00123'));
 });
 
 function typed(name: string, columns: string[], data: TypedSheetData['data']): TypedSheetData {

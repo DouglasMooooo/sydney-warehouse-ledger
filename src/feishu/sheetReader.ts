@@ -43,7 +43,12 @@ export class FeishuOpenApiWarehouseSheetReader implements WarehouseSheetReader {
   }
 
   async healthCheck(): Promise<boolean> {
-    try { await this.loadSheets(); return true; } catch { return false; }
+    try {
+      const first = (await this.loadSheets())[0];
+      if (!first) return false;
+      await this.readTable({ sheetId: first.sheet_id, noHeader: true, range: 'A1:A1' });
+      return true;
+    } catch { return false; }
   }
 
   private async resolveSheet(input: Omit<ReadTypedTableInput, 'spreadsheetUrl'>): Promise<SheetInfo> {

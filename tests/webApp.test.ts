@@ -178,7 +178,7 @@ test('client DTO rejects trusted state, Date objects, and arbitrary cell coordin
 });
 
 test('preview route exposes no raw Feishu write primitive or spreadsheet coordinates', () => {
-  const route = readFileSync('app/api/warehouse/work-orders/prepare/route.ts', 'utf8');
+  const route = readFileSync('app/api/warehouse/work-orders/preview/route.ts', 'utf8');
   for (const forbidden of [
     'writeExplicitCells', 'runLarkCli', 'spawnSync', 'FEISHU_APP_SECRET',
     'tenant_access_token', 'FEISHU_SPREADSHEET_URL', 'ProposedChange',
@@ -202,7 +202,6 @@ test('read and preview routes enforce explicit server permissions', () => {
     'app/api/warehouse/exceptions/route.ts': 'TASK_READ',
     'app/api/warehouse/layout/route.ts': 'INVENTORY_READ',
     'app/api/warehouse/work-orders/preview/route.ts': 'WORK_ORDER_PREVIEW',
-    'app/api/warehouse/work-orders/prepare/route.ts': 'WORK_ORDER_PREVIEW',
     'app/api/warehouse/exceptions/deep-scan/route.ts': 'TASK_READ',
   };
   for (const [path, permission] of Object.entries(routes)) {

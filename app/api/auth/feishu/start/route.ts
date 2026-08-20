@@ -12,5 +12,6 @@ export async function GET() {
   const options = { httpOnly: true, secure: runtime === 'production', sameSite: 'lax' as const, path: '/', maxAge: 5 * 60 };
   response.cookies.set('warehouse_oauth_state', state, options);
   response.cookies.set('warehouse_oauth_verifier', verifier, options);
+  response.headers.set('Cache-Control', 'no-store');
   return response;
 }

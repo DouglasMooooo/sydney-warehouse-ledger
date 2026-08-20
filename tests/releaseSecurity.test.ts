@@ -32,7 +32,7 @@ test('operational logs contain only the approved low-cardinality fields', () => 
 test('client modules cannot import server credentials, writers, CLI, or child_process', () => {
   const clientFiles = allFiles('app').filter((path) => path.endsWith('.tsx') || path.endsWith('.ts'))
     .filter((path) => readFileSync(path, 'utf8').includes("'use client'"));
-  const forbidden = ['feishuIdentity', 'openApiClient', 'session', '/write', 'feishu/client', 'child_process', 'node:child_process'];
+  const forbidden = ['feishuIdentity', 'openApiClient', 'runtimeConfig', 'session', '/write', 'feishu/client', 'child_process', 'node:child_process'];
   for (const path of clientFiles) {
     const source = readFileSync(path, 'utf8');
     for (const value of forbidden) assert(!source.includes(value), `${path} must not reference ${value}`);

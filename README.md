@@ -6,7 +6,7 @@ The project deliberately keeps the current ledger as the system of record. It do
 
 ## Current stage
 
-Phase 2.5 authenticated read-only release preparation is implemented; production deployment/UAT configuration remains pending.
+Phase 2.6 read-only Feishu UAT code preparation is implemented; HTTPS deployment, Feishu console configuration, and live-user UAT remain pending.
 
 - Strict TypeScript normalisation, controlled-value validation, protected-column guards, and typed write preparation are available for future workflows.
 - The read-only data-quality scanner emits privacy-safe JSON and Markdown reports.
@@ -23,6 +23,9 @@ Phase 2.5 authenticated read-only release preparation is implemented; production
 - A hosted production read adapter uses official Feishu OpenAPI with a dedicated in-memory tenant-token cache; the local CLI reader remains available for development/admin scripts.
 - Live and deep exceptions are truthfully separated. Deep quality scanning is explicit, rate-limited, and returns a safe operational DTO.
 - `READ_ONLY_RELEASE=true`, the `只读试运行` banner, safe health status, bounded request logging, and private historical XLSX fixture support prepare read-only UAT.
+- Production startup/readiness now fails closed unless the complete `READ_ONLY_UAT` OpenAPI/HTTPS/auth/role configuration is present; `/api/health` separately proves config and target-spreadsheet readability.
+- Deep OpenAPI coverage is explicit about transport limits: date/formula checks are PARTIAL until live evidence, and unavailable validation metadata is not advertised as authoritative.
+- The UAT parity runner compares privacy-safe business aggregates across trusted CLI and hosted OpenAPI reads; no real-ledger parity is claimed without execution evidence.
 - No operational business writer has been activated.
 
 Return, Move, Adjustment, Label confirmation, all AI/write actions, and every production business write remain explicitly deferred. Feishu console setup, HTTPS hosting, document permissions, and staff UAT are not claimed complete.
@@ -47,6 +50,9 @@ Return, Move, Adjustment, Label confirmation, all AI/write actions, and every pr
 - [`docs/PHASE_2_5_READ_ONLY_RELEASE.md`](docs/PHASE_2_5_READ_ONLY_RELEASE.md): authenticated read-only boundary, exception coverage, OpenAPI strategy, security, and remaining UAT blockers.
 - [`docs/FEISHU_DEPLOYMENT_CHECKLIST.md`](docs/FEISHU_DEPLOYMENT_CHECKLIST.md): exact internal H5 console, hosting, environment, security, and UAT steps.
 - [`reports/phase2_5-release-gate.md`](reports/phase2_5-release-gate.md): privacy-safe Phase 2.5 evidence and release decision.
+- [`docs/PHASE_2_6_UAT.md`](docs/PHASE_2_6_UAT.md): Phase 2.6 code boundary, truthful deep coverage, parity tooling, and live-UAT blockers.
+- [`docs/FEISHU_UAT_CONFIGURATION.md`](docs/FEISHU_UAT_CONFIGURATION.md): exact project URLs, environment names, minimum read-only scopes, document access, roles, and CSP decision.
+- [`reports/phase2_6-uat-release-gate.md`](reports/phase2_6-uat-release-gate.md): separate CODE, CONFIGURATION, and LIVE UAT evidence.
 - [`reports/phase2-reconciliation.md`](reports/phase2-reconciliation.md): privacy-safe live layout and non-regression release gate.
 - Other files under `docs/`: standards, schema, workflows, quality rules, views, and AI-skill refactor plan.
 
