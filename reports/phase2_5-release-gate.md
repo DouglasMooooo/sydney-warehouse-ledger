@@ -18,7 +18,7 @@ Status: **CODE GATE PASS / DEPLOYMENT UAT PENDING**
 | Typecheck | PASS | `npm run typecheck`. |
 | Unit/regression tests | PASS | `npm test`: 122 tests passed. |
 | Production build | PASS | `npm run build`: optimized Next.js production build completed. |
-| CI | PENDING PUSH | Required workflow remains `npm ci`, typecheck, test, build. |
+| CI | PASS | GitHub Actions run `32348075672` passed for implementation commit `b382bbd`; workflow ran the credential-free pure-logic gate. |
 | Production business writes | **0** | No online ledger modification and no business mutation route. |
 
 The code is ready for authenticated read-only deployment configuration, not for Phase 3 writes. Staff UAT is pending Feishu console setup, HTTPS hosting, authorized document access, and private-fixture evidence.
