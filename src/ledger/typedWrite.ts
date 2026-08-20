@@ -1,0 +1,100 @@
+import { LEDGER_COLUMNS, assertColumnWriteAllowed, type BusinessColumn } from '../config/ledgerSchema.js';
+import {
+  normalizeAction, normalizeContainer, normalizeDate, normalizeLocation, normalizePickupCode,
+  normalizeQty, normalizeSH, normalizeSKU, normalizeSN, normalizeStockCondition,
+  normalizeIdentifier, toFeishuDateSerial,
+} from './normalize.js';
+import { validateLedgerInput, type NormalizedLedgerInput, type ValidationError } from './validators.js';
+
+export interface LedgerWriteInput {
+  date?: unknown;
+  outboundDate?: unknown;
+  action?: unknown;
+  shNo?: unknown;
+  pickupCode?: unknown;
+  containerCode?: unknown;
+  sku?: unknown;
+  sn?: unknown;
+  qty?: unknown;
+  fromLocation?: unknown;
+  toLocation?: unknown;
+  erpWarehouse?: unknown;
+  stockCondition?: unknown;
+  remark?: unknown;
+}
+
+export interface ProposedLedgerCell {
+  column: BusinessColumn;
+  value: string | number;
+  valueType: 'text' | 'number' | 'date';
+  numberFormat?: string;
+}
+
+export interface PreparedLedgerWrite {
+  ok: boolean;
+  dryRun: boolean;
+  normalized?: NormalizedLedgerInput;
+  proposedCells: ProposedLedgerCell[];
+  errors: ValidationError[];
+}
+
+export function prepareLedgerWrite(input: LedgerWriteInput, dryRun = true): PreparedLedgerWrite {
+  let normalized: NormalizedLedgerInput;
+  try {
+    normalized = compact({
+      date: normalizeDate(input.date),
+      outboundDate: normalizeDate(input.outboundDate),
+      action: normalizeAction(input.action),
+      shNo: normalizeSH(input.shNo),
+      pickupCode: normalizePickupCode(input.pickupCode),
+      containerCode: normalizeContainer(input.containerCode),
+      sku: normalizeSKU(input.sku),
+      sn: normalizeSN(input.sn),
+      qty: normalizeQty(input.qty),
+      fromLocation: normalizeLocation(input.fromLocation),
+      toLocation: normalizeLocation(input.toLocation),
+      erpWarehouse: normalizeIdentifier(input.erpWarehouse, 'erpWarehouse'),
+      stockCondition: normalizeStockCondition(input.stockCondition),
+      remark: normalizeIdentifier(input.remark, 'remark'),
+    }) as NormalizedLedgerInput;
+  } catch (error) {
+    return {
+      ok: false, dryRun, proposedCells: [],
+      errors: [{ code: 'NORMALIZATION_ERROR', field: 'action', message: String(error) }],
+    };
+  }
+  const validation = validateLedgerInput(normalized);
+  if (!validation.ok) return { ok: false, dryRun, normalized, proposedCells: [], errors: validation.errors };
+
+  const proposedCells: ProposedLedgerCell[] = [];
+  const add = (column: BusinessColumn, value: string | number | undefined, valueType: ProposedLedgerCell['valueType'], numberFormat?: string) => {
+    if (value === undefined) return;
+    assertColumnWriteAllowed(column, 'BUSINESS_RECORD');
+    const cell: ProposedLedgerCell = { column, value, valueType };
+    if (numberFormat !== undefined) cell.numberFormat = numberFormat;
+    proposedCells.push(cell);
+  };
+  add(LEDGER_COLUMNS.date, normalized.date && toFeishuDateSerial(normalized.date), 'date', 'yyyy-mm-dd');
+  add(LEDGER_COLUMNS.outboundDate, normalized.outboundDate && toFeishuDateSerial(normalized.outboundDate), 'date', 'yyyy-mm-dd');
+  add(LEDGER_COLUMNS.action, normalized.action, 'text');
+  add(LEDGER_COLUMNS.shNo, normalized.shNo, 'text');
+  add(LEDGER_COLUMNS.pickupCode, normalized.pickupCode, 'text');
+  add(LEDGER_COLUMNS.containerCode, normalized.containerCode, 'text');
+  add(LEDGER_COLUMNS.sku, normalized.sku, 'text');
+  add(LEDGER_COLUMNS.sn, normalized.sn, 'text');
+  add(LEDGER_COLUMNS.qty, normalized.qty, 'number', '0');
+  add(LEDGER_COLUMNS.fromLocation, normalized.fromLocation, 'text');
+  add(LEDGER_COLUMNS.toLocation, normalized.toLocation, 'text');
+  add(LEDGER_COLUMNS.erpWarehouse, normalized.erpWarehouse, 'text');
+  add(LEDGER_COLUMNS.stockCondition, normalized.stockCondition, 'text');
+  add(LEDGER_COLUMNS.remark, normalized.remark, 'text');
+  return { ok: true, dryRun, normalized, proposedCells, errors: [] };
+}
+
+function compact<T extends object>(input: T): T {
+  return Object.fromEntries(Object.entries(input).filter(([, value]) => value !== undefined)) as T;
+}
+
+export function verifyPreparedWrite(expected: ProposedLedgerCell[], actual: Map<string, unknown>, row: number): boolean {
+  return expected.every((cell) => Object.is(actual.get(`${cell.column}${row}`), cell.value));
+}

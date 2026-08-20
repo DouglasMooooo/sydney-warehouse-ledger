@@ -1,6 +1,7 @@
 # Credentials and local configuration
 .env
 .env.*
+!.env.example
 *.pem
 *.key
 *auth*.json
@@ -22,14 +23,17 @@ outputs/
 tmp/
 sheet_work/
 xlsx_processing/
+.phase1/
+reports/private/
 
 # Local agent/app state
 .codex/
 .agents/
 
 # Runtime artifacts
+node_modules/
+dist/
 __pycache__/
 *.pyc
 .DS_Store
 Thumbs.db
-

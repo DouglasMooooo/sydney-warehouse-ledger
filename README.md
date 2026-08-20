@@ -6,17 +6,15 @@ The project deliberately keeps the current ledger as the system of record. It do
 
 ## Current stage
 
-Phase 1/2 planning and independent review. No production ledger implementation code or operational data is published here.
+Phase 1 safe foundation is implemented and verified against the production workbook.
 
-Current approved scope:
+- Strict TypeScript normalisation, controlled-value validation, protected-column guards, and typed write preparation are available for future workflows.
+- The read-only data-quality scanner emits privacy-safe JSON and Markdown reports.
+- Only the eight confirmed formula gaps were repaired: `H1653`, `I1653`, `AB1654:AC1656`.
+- Post-repair current-inventory, weekly, and monthly reconciliation passed with no KPI changes.
+- No operational business writer has been activated.
 
-1. Forward-looking typed write helpers for new records.
-2. Repair only confirmed formula gaps.
-3. Restore SKU-level warehouse-layout visibility.
-4. Derive Today Task views from existing ledger fields.
-5. Build a lightweight operations dashboard from dynamic sources.
-
-Work-order writes, Pickup Code writes, return intake, movement, adjustments, and label automation remain out of scope until Phase 3.
+Warehouse-layout deployment, Today Task views, dashboard work, and AI actions remain explicitly deferred to the next iteration.
 
 ## Repository map
 
@@ -25,7 +23,20 @@ Work-order writes, Pickup Code writes, return intake, movement, adjustments, and
 - [`docs/CURRENT_LEDGER_AUDIT.md`](docs/CURRENT_LEDGER_AUDIT.md): audited workbook structure and risks.
 - [`docs/PHASE_1_2_SCOPE.md`](docs/PHASE_1_2_SCOPE.md): corrected implementation boundaries.
 - [`docs/IMPLEMENTATION_PLAN.md`](docs/IMPLEMENTATION_PLAN.md): phased delivery plan.
+- [`docs/PHASE_1_IMPLEMENTATION.md`](docs/PHASE_1_IMPLEMENTATION.md): implemented code, controlled repair, verification, and limitations.
+- [`reports/data-quality-latest.md`](reports/data-quality-latest.md): privacy-safe scan counts and safe row numbers.
+- [`reports/phase1-reconciliation.md`](reports/phase1-reconciliation.md): aggregate/KPI release-gate result.
 - Other files under `docs/`: standards, schema, workflows, quality rules, views, and AI-skill refactor plan.
+
+## Development
+
+```bash
+npm install
+npm test
+npm run build
+```
+
+Production scripts require the environment variables documented in `.env.example` and an authenticated `lark-cli` user session. Dry-run must precede formula apply.
 
 ## Privacy
 
@@ -34,4 +45,3 @@ The production Feishu URL, workbook token, credentials, operational files, seria
 ## Review status
 
 External review is welcome through GitHub issues. Reviewers should focus on correctness, safety, Feishu compatibility, reconciliation, and whether the design stays recognisable as the existing ledger.
-
