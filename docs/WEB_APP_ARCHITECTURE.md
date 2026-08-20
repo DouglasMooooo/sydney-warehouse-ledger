@@ -134,7 +134,7 @@ Pickup Code allocation remains inactive. Its future transaction is:
 
 | Route | Responsibility |
 | --- | --- |
-| `/dashboard` | 今日新工单、待备货、待取货、今日已出库、今日返修、异常数量；新机、维修良品、待修、维修库存、报废 |
+| `/dashboard` | 今日备货工单、待备货（不可用）、按 Pickup/SH 分组的待取货、今日已出库、今日返修、异常数量；新机、维修良品、待修、维修库存、报废 |
 | `/work-orders` | Upload/paste work order, Replacement Unit parsing, Product Master validation, available stock recommendation, preview only until write gates are released |
 | `/returns` | SN history/conflict lookup and Return to Repair preview |
 | `/moves` | Current source/condition lookup, target selection and Move preview |
@@ -143,7 +143,7 @@ Pickup Code allocation remains inactive. Its future transaction is:
 
 All dashboard and inventory values come from the existing ledger/current-inventory sources. There is no cache, shadow status, or inventory database. `待备货` is shown as unavailable because the current ledger has no pre-prepared status record.
 
-The implemented Prepared preview accepts a work-order text/file and optional explicit business fields, validates the Replacement SKU against Product Master, maps ERP warehouse to an allowed stock condition by a deterministic server rule, recommends only an actual matching current-inventory location/container, and previews the next Pickup Code. It performs zero writes and exposes no confirm endpoint.
+The implemented Prepared prototype accepts plain text only, parses replacement lines strictly within a literal Replacement section, validates the SKU against Product Master, maps ERP warehouse through an explicit fail-closed allowlist, recommends only an actual matching single-location inventory candidate, and previews the next unreserved Pickup Code. Binary XLSX upload is not yet wired. It performs zero writes and exposes no confirm endpoint.
 
 ## Release gates and current blockers
 

@@ -26,9 +26,9 @@ export default async function DashboardPage() {
 
 function DashboardContent({ snapshot }: { snapshot: DashboardSnapshot }) {
   const metrics = [
-    ['今日新工单', snapshot.metrics.todayNewWorkOrders],
+    ['今日备货工单', snapshot.metrics.todayPreparedWorkOrders],
     ['待备货', snapshot.metrics.awaitingPreparation],
-    ['待取货', snapshot.metrics.awaitingPickup],
+    ['待取货（派生）', snapshot.metrics.awaitingPickup],
     ['今日已出库', snapshot.metrics.shippedToday],
     ['今日返修', snapshot.metrics.returnedToday],
     ['异常数量', snapshot.metrics.exceptionCount],
@@ -57,7 +57,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   return <section className="card section-card"><h3>{title}</h3>{children}</section>;
 }
 
-function DataTable({ headers, rows }: { headers: string[]; rows: Array<Array<string | number>> }) {
+function DataTable({ headers, rows }: { headers: string[]; rows: Array<Array<string | number | null>> }) {
   if (rows.length === 0) return <div className="empty-state">当前来源没有可显示记录</div>;
-  return <div className="table-wrap"><table><thead><tr>{headers.map((header) => <th key={header}>{header}</th>)}</tr></thead><tbody>{rows.map((row, index) => <tr key={`${index}-${row.join('-')}`}>{row.map((cell, cellIndex) => <td key={cellIndex}>{cell}</td>)}</tr>)}</tbody></table></div>;
+  return <div className="table-wrap"><table><thead><tr>{headers.map((header) => <th key={header}>{header}</th>)}</tr></thead><tbody>{rows.map((row, index) => <tr key={`${index}-${row.join('-')}`}>{row.map((cell, cellIndex) => <td key={cellIndex}>{cell ?? '—'}</td>)}</tr>)}</tbody></table></div>;
 }

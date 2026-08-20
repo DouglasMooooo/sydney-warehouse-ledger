@@ -1,10 +1,30 @@
 import { isLedgerAction, isStockCondition, type LedgerAction, type StockCondition } from '../config/controlledValues.js';
+import type { NormalizedLedgerInput } from './validators.js';
 export {
-  businessDateFromSydneyDate, normalizeBusinessDate, todayInSydney, toFeishuDateSerial,
+  businessDateFromSydneyInstant, parseBusinessDateString, todayInSydney, toFeishuDateSerial,
+  businessDateFromSydneyDate, normalizeBusinessDate,
   type BusinessDate,
 } from './businessDate.js';
 
 const forbiddenCharacters = /[\r\n\t\u200B-\u200D\u2060\uFEFF]/g;
+
+export class LedgerNormalizationError extends TypeError {
+  readonly code = 'NORMALIZATION_ERROR' as const;
+
+  constructor(readonly field: keyof NormalizedLedgerInput | 'unknown', message: string, options?: ErrorOptions) {
+    super(message, options);
+    this.name = 'LedgerNormalizationError';
+  }
+}
+
+export function normalizeField<T>(field: keyof NormalizedLedgerInput, operation: () => T): T {
+  try {
+    return operation();
+  } catch (error) {
+    if (error instanceof LedgerNormalizationError) throw error;
+    throw new LedgerNormalizationError(field, error instanceof Error ? error.message : String(error), { cause: error });
+  }
+}
 
 export function normalizeIdentifier(value: unknown, field: string): string | undefined {
   if (value === undefined || value === null || value === '') return undefined;

@@ -18,6 +18,20 @@ test('prepared write emits only business columns with typed date and text SKU', 
   assert(!result.proposedCells.some((cell) => ['H', 'I', 'O', 'AB', 'AC'].includes(cell.column)));
 });
 
+for (const [field, input] of [
+  ['date', { date: '2026-02-30', action: '期初库存' }],
+  ['qty', { qty: 'many', action: '期初库存' }],
+  ['pickupCode', { pickupCode: 'SYD-1', action: '备货' }],
+  ['action', { action: 'UNKNOWN' }],
+] as const) {
+  test(`normalization failure reports the correct ${field} field`, () => {
+    const result = prepareLedgerWrite(input);
+    assert.equal(result.ok, false);
+    assert.equal(result.errors[0]?.code, 'NORMALIZATION_ERROR');
+    assert.equal(result.errors[0]?.field, field);
+  });
+}
+
 test('date proposal becomes a numeric value with explicit yyyy-mm-dd style', () => {
   const prepared = prepareLedgerWrite({
     action: '期初库存', date: '2026-08-20', qty: 1, toLocation: 'R1', stockCondition: '新机',

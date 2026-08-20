@@ -13,7 +13,9 @@ Phase 1 safe foundation is implemented and verified against the production workb
 - Only the eight confirmed formula gaps were repaired: `H1653`, `I1653`, `AB1654:AC1656`.
 - Post-repair current-inventory, weekly, and monthly reconciliation passed with no KPI changes.
 - Business dates and operation-scoped optimistic concurrency have been hardened for future writes.
-- A thin Next.js Web App now provides the navigation shell, live read-only Dashboard, and Work Order / Prepared preview. The preview performs zero writes.
+- A thin Next.js Web App provides the navigation shell, live read-only Dashboard, and a clearly labelled Work Order Preview Prototype. The preview performs zero writes.
+- Review fixes now fail closed for unknown ERP warehouses, isolate Replacement-section parsing, derive active pickup tasks from later Outbound activity, prefer consolidated inventory, and report malformed quantities.
+- GitHub Actions runs the pure typecheck, unit-test, and production-build gates without Feishu credentials.
 - No operational business writer has been activated.
 
 Return, Move, Adjustment, Label, warehouse-layout deployment, Today Task views, and AI write actions remain explicitly deferred.
@@ -31,6 +33,7 @@ Return, Move, Adjustment, Label, warehouse-layout deployment, Today Task views, 
 - [`reports/typed-date-e2e.md`](reports/typed-date-e2e.md): isolated Feishu typed-date write/read verification.
 - [`docs/WEB_APP_ARCHITECTURE.md`](docs/WEB_APP_ARCHITECTURE.md): minimal Next.js/application-service boundaries, write lifecycle, concurrency design, routes, and release gates.
 - [`docs/WEB_APP_ITERATION_1.md`](docs/WEB_APP_ITERATION_1.md): implemented routes, read services, preview limits, security boundary, and next release gates.
+- [`docs/REVIEW_FIX_ITERATION.md`](docs/REVIEW_FIX_ITERATION.md): review findings, exact fixes, Dashboard metric definitions, parser/XLSX limitations, tests, and remaining write blockers.
 - Other files under `docs/`: standards, schema, workflows, quality rules, views, and AI-skill refactor plan.
 
 ## Development
@@ -40,6 +43,8 @@ npm install
 npm test
 npm run build
 ```
+
+The pure suite runs in CI. `npm run test:feishu-date` is a separate manual integration check and must use only an isolated non-production workbook.
 
 Production scripts require the environment variables documented in `.env.example` and an authenticated `lark-cli` user session. Dry-run must precede formula apply.
 

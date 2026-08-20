@@ -1,15 +1,11 @@
 const workOrderAllowedKeys = new Set([
-  'businessDate', 'sourceText', 'sourceFileName', 'sh', 'replacementSku', 'qty', 'erpWarehouse',
+  'businessDate', 'sourceText', 'sourceFileName',
 ]);
 
 export interface WorkOrderPreviewClientDto {
   businessDate: string;
   sourceText: string;
   sourceFileName?: string;
-  sh?: string;
-  replacementSku?: string;
-  qty?: number;
-  erpWarehouse?: string;
 }
 
 export interface MoveClientDto {
@@ -25,13 +21,9 @@ export function parseWorkOrderPreviewClientDto(value: unknown): WorkOrderPreview
     businessDate: requiredString(input.businessDate, 'businessDate'),
     sourceText: requiredString(input.sourceText, 'sourceText'),
   };
-  if (input.sourceFileName !== undefined) dto.sourceFileName = requiredString(input.sourceFileName, 'sourceFileName');
-  if (input.sh !== undefined) dto.sh = requiredString(input.sh, 'sh');
-  if (input.replacementSku !== undefined) dto.replacementSku = requiredString(input.replacementSku, 'replacementSku');
-  if (input.erpWarehouse !== undefined) dto.erpWarehouse = requiredString(input.erpWarehouse, 'erpWarehouse');
-  if (input.qty !== undefined) {
-    if (typeof input.qty !== 'number' || !Number.isFinite(input.qty)) throw new TypeError('qty must be numeric');
-    dto.qty = input.qty;
+  if (input.sourceFileName !== undefined) {
+    dto.sourceFileName = requiredString(input.sourceFileName, 'sourceFileName');
+    if (/\.xlsx$/i.test(dto.sourceFileName)) throw new TypeError('XLSX_NOT_SUPPORTED');
   }
   return dto;
 }

@@ -2,9 +2,9 @@ import { LEDGER_COLUMNS, assertColumnWriteAllowed, type BusinessColumn } from '.
 import {
   normalizeAction, normalizeContainer, normalizeLocation, normalizePickupCode,
   normalizeQty, normalizeSH, normalizeSKU, normalizeSN, normalizeStockCondition,
-  normalizeIdentifier, normalizeRemark,
+  normalizeIdentifier, normalizeRemark, normalizeField, LedgerNormalizationError,
 } from './normalize.js';
-import { normalizeBusinessDate, toFeishuDateSerial } from './businessDate.js';
+import { parseBusinessDateString, toFeishuDateSerial } from './businessDate.js';
 import { validateLedgerInput, type NormalizedLedgerInput, type ValidationError } from './validators.js';
 
 export interface LedgerWriteInput {
@@ -45,26 +45,29 @@ export function prepareLedgerWrite(input: LedgerWriteInput, dryRun = true): Prep
   let normalized: NormalizedLedgerInput;
   try {
     normalized = compact({
-      date: normalizeBusinessDate(input.date),
-      outboundDate: normalizeBusinessDate(input.outboundDate),
-      action: normalizeAction(input.action),
-      shNo: normalizeSH(input.shNo),
-      pickupCode: normalizePickupCode(input.pickupCode),
-      containerCode: normalizeContainer(input.containerCode),
-      sku: normalizeSKU(input.sku),
-      sn: normalizeSN(input.sn),
-      qty: normalizeQty(input.qty),
-      fromLocation: normalizeLocation(input.fromLocation),
-      toLocation: normalizeLocation(input.toLocation),
-      erpWarehouse: normalizeIdentifier(input.erpWarehouse, 'erpWarehouse'),
-      stockCondition: normalizeStockCondition(input.stockCondition),
-      sourceStockCondition: normalizeStockCondition(input.sourceStockCondition),
-      remark: normalizeRemark(input.remark),
+      date: normalizeField('date', () => parseBusinessDateString(input.date)),
+      outboundDate: normalizeField('outboundDate', () => parseBusinessDateString(input.outboundDate)),
+      action: normalizeField('action', () => normalizeAction(input.action)),
+      shNo: normalizeField('shNo', () => normalizeSH(input.shNo)),
+      pickupCode: normalizeField('pickupCode', () => normalizePickupCode(input.pickupCode)),
+      containerCode: normalizeField('containerCode', () => normalizeContainer(input.containerCode)),
+      sku: normalizeField('sku', () => normalizeSKU(input.sku)),
+      sn: normalizeField('sn', () => normalizeSN(input.sn)),
+      qty: normalizeField('qty', () => normalizeQty(input.qty)),
+      fromLocation: normalizeField('fromLocation', () => normalizeLocation(input.fromLocation)),
+      toLocation: normalizeField('toLocation', () => normalizeLocation(input.toLocation)),
+      erpWarehouse: normalizeField('erpWarehouse', () => normalizeIdentifier(input.erpWarehouse, 'erpWarehouse')),
+      stockCondition: normalizeField('stockCondition', () => normalizeStockCondition(input.stockCondition)),
+      sourceStockCondition: normalizeField('sourceStockCondition', () => normalizeStockCondition(input.sourceStockCondition)),
+      remark: normalizeField('remark', () => normalizeRemark(input.remark)),
     }) as NormalizedLedgerInput;
   } catch (error) {
+    const normalizationError = error instanceof LedgerNormalizationError
+      ? error
+      : new LedgerNormalizationError('unknown', error instanceof Error ? error.message : String(error));
     return {
       ok: false, dryRun, proposedCells: [],
-      errors: [{ code: 'NORMALIZATION_ERROR', field: 'action', message: String(error) }],
+      errors: [{ code: normalizationError.code, field: normalizationError.field, message: normalizationError.message }],
     };
   }
   const validation = validateLedgerInput(normalized);

@@ -7,7 +7,7 @@ const businessDatePattern = /^(\d{4})([-/])(\d{1,2})\2(\d{1,2})$/;
 const feishuEpochUtc = Date.UTC(1899, 11, 30);
 const dayMilliseconds = 86_400_000;
 
-export function normalizeBusinessDate(value: unknown): BusinessDate | undefined {
+export function parseBusinessDateString(value: unknown): BusinessDate | undefined {
   if (value === undefined || value === null || value === '') return undefined;
   if (typeof value !== 'string') throw new TypeError('business date must be YYYY-MM-DD text');
   const match = businessDatePattern.exec(value.trim());
@@ -20,7 +20,7 @@ export function normalizeBusinessDate(value: unknown): BusinessDate | undefined 
 }
 
 /** Convert an instant to the Sydney warehouse calendar date explicitly. */
-export function businessDateFromSydneyDate(value: Date): BusinessDate {
+export function businessDateFromSydneyInstant(value: Date): BusinessDate {
   if (!(value instanceof Date) || Number.isNaN(value.getTime())) throw new TypeError('date instant is invalid');
   const parts = new Intl.DateTimeFormat('en-AU', {
     timeZone: 'Australia/Sydney',
@@ -29,14 +29,20 @@ export function businessDateFromSydneyDate(value: Date): BusinessDate {
     day: '2-digit',
   }).formatToParts(value);
   const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((item) => item.type === type)?.value;
-  const normalized = normalizeBusinessDate(`${part('year')}-${part('month')}-${part('day')}`);
+  const normalized = parseBusinessDateString(`${part('year')}-${part('month')}-${part('day')}`);
   if (!normalized) throw new TypeError('unable to derive Sydney business date');
   return normalized;
 }
 
 export function todayInSydney(now = new Date()): BusinessDate {
-  return businessDateFromSydneyDate(now);
+  return businessDateFromSydneyInstant(now);
 }
+
+/** @deprecated Use parseBusinessDateString; retained only for compatibility during migration. */
+export const normalizeBusinessDate = parseBusinessDateString;
+
+/** @deprecated Use businessDateFromSydneyInstant. */
+export const businessDateFromSydneyDate = businessDateFromSydneyInstant;
 
 export function toFeishuDateSerial(date: BusinessDate): number {
   const { year, month, day } = businessDateParts(date);

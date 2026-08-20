@@ -10,7 +10,7 @@
 
 ## Prepared preview rules
 
-The parser extracts only SH, Replacement SKU, quantity, and ERP warehouse. `Faulty Unit` is never treated as Replacement. Product Master must contain the SKU. The server maps the ERP warehouse to `新机` or `维修良品` by a deterministic policy and queries only real current-inventory candidates with that SKU/condition and sufficient quantity. Location and container are selected deterministically from those candidates. Pickup Code is a non-committed preview and must be rechecked at future confirmation.
+The text prototype extracts SH and replacement lines only from a literal `Replacement Unit information` section. `Faulty Unit` is never treated as Replacement. Product Master must contain the SKU. The server maps only explicitly supported ERP warehouse values and queries real current-inventory candidates with the exact SKU/condition and sufficient single-location quantity. Location and container are selected deterministically from those candidates. Pickup Code is an unreserved preview and must be reread and rechecked for uniqueness immediately before any future commit.
 
 The response contains business fields only. It does not expose spreadsheet URL/token, sheet ID, cell/range coordinates, `ProposedChange`, credentials, or write primitives. There is no confirm endpoint, and the read port has no append/write method.
 
@@ -24,6 +24,7 @@ The response contains business fields only. It does not expose spreadsheet URL/t
 ## Known limitations
 
 - The current ledger has no pre-Prepared work-order status, so Dashboard cannot truthfully calculate `待备货`; the UI shows it as unavailable rather than inventing a Status column.
+- Production binary XLSX decoding/upload is not implemented. The adapter boundary and worksheet-matrix parsing core are present for a later maintained local decoder; the UI remains explicitly labelled Prototype.
 - The app requires server-side Feishu environment variables and an authenticated `lark-cli` session. Missing access is shown as a visible system error.
 - No browser-facing authentication/authorization, signed preview token, idempotency, concurrent Pickup Code commit, or post-write reconciliation orchestration is active yet.
 

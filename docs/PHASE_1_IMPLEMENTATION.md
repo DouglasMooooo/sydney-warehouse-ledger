@@ -50,7 +50,7 @@ The release gate compared aggregate current-inventory totals, nine current-week 
 ## Verification
 
 - TypeScript strict build: PASS.
-- Automated tests: 52 passed after approved review corrections, date/concurrency hardening, and Web App preview expansion.
+- Automated tests: 70 passed after approved review corrections, date/concurrency hardening, parser and Dashboard semantics fixes, and Web App preview expansion.
 - Isolated Feishu typed-date write/read: PASS. The write carried a numeric date serial and `yyyy-mm-dd`; typed reread confirmed a date-compatible dtype, the same number format, and the expected business date.
 - Post-repair scanner: `FORMULA_MISSING = 0`, `FORMULA_BROKEN = 0`.
 - Business-cell snapshot comparison: PASS.

@@ -37,14 +37,14 @@ export function WorkOrderPreviewClient({ initialBusinessDate }: { initialBusines
     <div className="workflow-grid">
       <form className="card form-card" onSubmit={submit}>
         <div className="field"><label htmlFor="businessDate">Sydney Business Date</label><input id="businessDate" type="date" value={businessDate} onChange={(event) => setBusinessDate(event.target.value)} required /></div>
-        <div className="field"><label htmlFor="workOrderFile">Upload work order (text-compatible)</label><input id="workOrderFile" type="file" accept=".txt,.csv,.md,text/plain,text/csv" onChange={onFile} /></div>
-        <div className="field"><label htmlFor="sourceText">Paste work-order information</label><textarea id="sourceText" value={sourceText} onChange={(event) => setSourceText(event.target.value)} placeholder={'SH: SH-2608-xxxx\nFaulty Unit: ...\nReplacement Unit: 97-xxx\nQty: 1\nERP Warehouse: 悉尼良品仓'} required /></div>
+        <div className="field"><label htmlFor="workOrderFile">Prototype text fixture (.txt/.csv/.md only)</label><input id="workOrderFile" type="file" accept=".txt,.csv,.md,text/plain,text/csv" onChange={onFile} /></div>
+        <div className="field"><label htmlFor="sourceText">Paste prototype work-order text</label><textarea id="sourceText" value={sourceText} onChange={(event) => setSourceText(event.target.value)} placeholder={'SH: SH-2608-xxxx\nFaulty Unit information\nSKU: BAD-xxx\nReplacement Unit information\nReplacement Unit: 97-xxx\nQty: 1\nERP Warehouse: 悉尼良品仓'} required /></div>
         <button className="primary-button" disabled={loading}>{loading ? '读取当前飞书库存…' : '生成 Prepared 预览'}</button>
       </form>
       <section className="card preview-card">
         <div className="preview-flow"><span>Upload Work Order</span><b>→</b><span>Parsed Replacement</span><b>→</b><span>Validation</span><b>→</b><span>Inventory</span><b>→</b><span>Prepared Preview</span></div>
         {systemError && <div className="notice error">系统读取失败：{systemError}</div>}
-        {!preview && !systemError && <div className="empty-state">粘贴工单后生成预览。系统不会把 Faulty Unit 当成 Replacement，也不会写入台账。</div>}
+        {!preview && !systemError && <div className="empty-state">这是文本解析原型，不代表已支持生产 ERP XLSX。系统只读取明确的 Replacement 区段，不会把 Faulty Unit 当成 Replacement，也不会写入台账。</div>}
         {preview && <PreviewResult preview={preview} />}
       </section>
     </div>

@@ -1,8 +1,10 @@
-import { normalizeBusinessDate, type BusinessDate } from '../ledger/businessDate.js';
+import { parseBusinessDateString, type BusinessDate } from '../ledger/businessDate.js';
 import { normalizeIdentifier, normalizeQty, normalizeSH, normalizeSKU } from '../ledger/normalize.js';
 import { prepareLedgerWrite } from '../ledger/typedWrite.js';
+import { parsePlainTextWorkOrder } from '../workOrders/textParser.js';
 import type { InventoryCandidate, WarehouseReadPort } from './contracts.js';
 import type { WorkOrderPreviewClientDto } from './clientDtos.js';
+import { ErpWarehouseUnsupportedError, preparedConditionForWarehouse } from './erpWarehouseRules.js';
 
 export type WorkOrderPreviewErrorCode =
   | 'REPLACEMENT_NOT_CLEAR'
@@ -10,7 +12,8 @@ export type WorkOrderPreviewErrorCode =
   | 'INSUFFICIENT_STOCK'
   | 'LOCATION_UNAVAILABLE'
   | 'INVALID_DATA'
-  | 'PICKUP_CODE_UNAVAILABLE';
+  | 'PICKUP_CODE_UNAVAILABLE'
+  | 'ERP_WAREHOUSE_UNSUPPORTED';
 
 export interface WorkOrderPreviewError {
   code: WorkOrderPreviewErrorCode;
@@ -52,20 +55,24 @@ export async function prepareWorkOrderPreview(
   dto: WorkOrderPreviewClientDto,
   port: WarehouseReadPort,
 ): Promise<WorkOrderPreview> {
-  const parsed = parseWorkOrderText(dto.sourceText);
+  const parserSource = dto.sourceFileName
+    ? { sourceText: dto.sourceText, sourceFileName: dto.sourceFileName }
+    : { sourceText: dto.sourceText };
+  const parsed = parsePlainTextWorkOrder(parserSource);
   const errors: WorkOrderPreviewError[] = [];
-  const warnings: string[] = [];
+  const warnings: string[] = [...parsed.warnings];
   let businessDate: BusinessDate | undefined;
   let sh: string | undefined;
   let replacementSku: string | undefined;
   let qty: number | undefined;
   let erpWarehouse: string | undefined;
   try {
-    businessDate = normalizeBusinessDate(dto.businessDate);
-    sh = normalizeSH(dto.sh ?? parsed.sh);
-    replacementSku = normalizeSKU(dto.replacementSku ?? parsed.replacementSku);
-    qty = normalizeQty(dto.qty ?? parsed.qty);
-    erpWarehouse = normalizeIdentifier(dto.erpWarehouse ?? parsed.erpWarehouse, 'erpWarehouse');
+    businessDate = parseBusinessDateString(dto.businessDate);
+    sh = normalizeSH(parsed.shNo);
+    const replacement = parsed.replacementLines.length === 1 ? parsed.replacementLines[0] : undefined;
+    replacementSku = normalizeSKU(replacement?.sku);
+    qty = normalizeQty(replacement?.qty);
+    erpWarehouse = normalizeIdentifier(replacement?.erpWarehouse, 'erpWarehouse');
   } catch (error) {
     errors.push({ code: 'INVALID_DATA', message: String(error) });
   }
@@ -75,10 +82,10 @@ export async function prepareWorkOrderPreview(
   if (replacementSku) extracted.replacementSku = replacementSku;
   if (qty !== undefined) extracted.qty = qty;
   if (erpWarehouse) extracted.erpWarehouse = erpWarehouse;
-  if (dto.sourceFileName) extracted.sourceFileName = dto.sourceFileName;
+  if (parsed.sourceFileName) extracted.sourceFileName = parsed.sourceFileName;
 
-  if (!replacementSku) {
-    errors.push({ code: 'REPLACEMENT_NOT_CLEAR', message: '未识别到明确的 Replacement Unit；Faulty Unit 不会被当作 Replacement。' });
+  if (parsed.confidence !== 'high' || parsed.replacementLines.length !== 1 || !replacementSku) {
+    errors.push({ code: 'REPLACEMENT_NOT_CLEAR', message: 'Replacement Unit information 未能明确解析为单一出库行；Faulty Unit 永远不会被用作 Replacement。' });
   }
   if (!businessDate || !sh || !replacementSku || !qty || !erpWarehouse || errors.length > 0) {
     return { mode: 'PREVIEW_ONLY', zeroWritesPerformed: true, extracted, errors, warnings };
@@ -90,7 +97,16 @@ export async function prepareWorkOrderPreview(
     return { mode: 'PREVIEW_ONLY', zeroWritesPerformed: true, businessDate, extracted, errors, warnings };
   }
 
-  const requiredCondition = preparedConditionForWarehouse(erpWarehouse);
+  let requiredCondition: ReturnType<typeof preparedConditionForWarehouse>;
+  try {
+    requiredCondition = preparedConditionForWarehouse(erpWarehouse);
+  } catch (error) {
+    if (error instanceof ErpWarehouseUnsupportedError) {
+      errors.push({ code: error.code, message: `不支持的 ERP Warehouse：${erpWarehouse}` });
+      return { mode: 'PREVIEW_ONLY', zeroWritesPerformed: true, businessDate, extracted, errors, warnings };
+    }
+    throw error;
+  }
   const candidates = await port.findAvailableInventory(replacementSku, requiredCondition, qty);
   const eligible = candidates.filter((candidate) =>
     candidate.sku === replacementSku
@@ -98,15 +114,20 @@ export async function prepareWorkOrderPreview(
     && candidate.availableQty >= qty!
     && candidate.location);
   eligible.sort((left, right) =>
-    left.location.localeCompare(right.location)
-    || (left.container ?? '').localeCompare(right.container ?? '')
-    || right.availableQty - left.availableQty);
+    right.availableQty - left.availableQty
+    || left.location.localeCompare(right.location)
+    || (left.container ?? '').localeCompare(right.container ?? ''));
   const recommendation = eligible[0];
   if (!recommendation) {
-    const total = candidates.reduce((sum, candidate) => sum + Math.max(0, candidate.availableQty), 0);
+    const located = candidates.filter((candidate) => candidate.location && candidate.availableQty > 0);
+    const total = located.reduce((sum, candidate) => sum + candidate.availableQty, 0);
+    const largest = located.reduce((max, candidate) => Math.max(max, candidate.availableQty), 0);
+    const sufficientWithoutLocation = candidates.some((candidate) => !candidate.location && candidate.availableQty >= qty);
     errors.push({
-      code: total < qty ? 'INSUFFICIENT_STOCK' : 'LOCATION_UNAVAILABLE',
-      message: total < qty ? `可用库存 ${total}，需求 ${qty}` : '库存记录存在，但没有可用库位。',
+      code: sufficientWithoutLocation ? 'LOCATION_UNAVAILABLE' : 'INSUFFICIENT_STOCK',
+      message: sufficientWithoutLocation
+        ? '库存记录存在，但没有可用库位。'
+        : `没有单一库位可满足需求 ${qty}；最大单库位库存 ${largest}，合计 ${total}。本轮不拆分库位。`,
     });
     return { mode: 'PREVIEW_ONLY', zeroWritesPerformed: true, businessDate, extracted, errors, warnings };
   }
@@ -148,7 +169,8 @@ export async function prepareWorkOrderPreview(
     stockCondition: recommendation.condition,
   };
   if (recommendation.container) row.container = recommendation.container;
-  warnings.push('Pickup Code 仅为预览；未来确认时必须重新检查并可能重新生成。');
+  warnings.push('Pickup Code 仅为预览，未被预留，确认前可能变化。');
+  warnings.push('未来写入必须在事务写入前重新读取全部 Pickup Code，并立即复核全局唯一性。');
   return {
     mode: 'PREVIEW_ONLY',
     zeroWritesPerformed: true,
@@ -162,28 +184,6 @@ export async function prepareWorkOrderPreview(
   };
 }
 
-export function parseWorkOrderText(sourceText: string): {
-  sh?: string;
-  replacementSku?: string;
-  qty?: number;
-  erpWarehouse?: string;
-} {
-  const lines = sourceText.split(/\r?\n/);
-  const values = (pattern: RegExp) => lines
-    .map((line) => pattern.exec(line)?.[1]?.trim())
-    .filter((value): value is string => Boolean(value));
-  const replacements = values(/^\s*Replacement(?:\s+Unit)?(?:\s+SKU)?\s*[:：-]\s*(.+?)\s*$/i);
-  const sh = values(/^\s*SH(?:\s*(?:No\.?|Number))?\s*[:：-]\s*(.+?)\s*$/i)[0];
-  const qtyText = values(/^\s*(?:Replacement\s+)?Qty\s*[:：-]\s*(\d+(?:\.\d+)?)\s*$/i)[0];
-  const erpWarehouse = values(/^\s*ERP\s*Warehouse\s*[:：-]\s*(.+?)\s*$/i)[0];
-  const result: { sh?: string; replacementSku?: string; qty?: number; erpWarehouse?: string } = {};
-  if (sh) result.sh = sh;
-  if (replacements.length === 1) result.replacementSku = replacements[0]!;
-  if (qtyText) result.qty = Number(qtyText);
-  if (erpWarehouse) result.erpWarehouse = erpWarehouse;
-  return result;
-}
-
 export function nextPickupCode(codes: string[]): string | undefined {
   let max = -1;
   for (const code of codes) {
@@ -193,11 +193,4 @@ export function nextPickupCode(codes: string[]): string | undefined {
   const next = max + 1;
   if (next > 99_999) return undefined;
   return `SYD-${String(next).padStart(5, '0')}`;
-}
-
-/** Deterministic warehouse policy. Neither AI nor the browser selects stock condition. */
-export function preparedConditionForWarehouse(
-  erpWarehouse: string,
-): Extract<InventoryCandidate['condition'], '新机' | '维修良品'> {
-  return /(?:维修|良品|repair(?:ed)?\s*good)/i.test(erpWarehouse) ? '维修良品' : '新机';
 }

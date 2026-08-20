@@ -43,7 +43,7 @@ export interface ProductRecord {
 export interface DashboardSnapshot {
   businessDate: BusinessDate;
   metrics: {
-    todayNewWorkOrders: number;
+    todayPreparedWorkOrders: number;
     awaitingPreparation: number | null;
     awaitingPickup: number;
     shippedToday: number;
@@ -58,8 +58,8 @@ export interface DashboardSnapshot {
     scrapped: number;
   };
   inventoryByModel: Array<{ model: string; condition: string; availableQty: number }>;
-  recentPrepared: Array<{ businessDate: string; sh: string; sku: string; qty: number; location: string; pickupCode: string }>;
-  recentReturns: Array<{ businessDate: string; sku: string; qty: number; location: string }>;
+  recentPrepared: Array<{ businessDate: string; sh: string; sku: string; qty: number | null; location: string; pickupCode: string }>;
+  recentReturns: Array<{ businessDate: string; sku: string; qty: number | null; location: string }>;
   exceptions: Array<{ code: string; count: number }>;
   notes: string[];
 }

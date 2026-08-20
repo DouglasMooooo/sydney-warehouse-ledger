@@ -22,7 +22,7 @@ export interface NormalizedLedgerInput {
 
 export interface ValidationError {
   code: string;
-  field: keyof NormalizedLedgerInput;
+  field: keyof NormalizedLedgerInput | 'unknown';
   message?: string;
 }
 
