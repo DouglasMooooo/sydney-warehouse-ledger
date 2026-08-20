@@ -26,6 +26,8 @@ Warehouse-layout deployment, Today Task views, dashboard work, and AI actions re
 - [`docs/PHASE_1_IMPLEMENTATION.md`](docs/PHASE_1_IMPLEMENTATION.md): implemented code, controlled repair, verification, and limitations.
 - [`reports/data-quality-latest.md`](reports/data-quality-latest.md): privacy-safe scan counts and safe row numbers.
 - [`reports/phase1-reconciliation.md`](reports/phase1-reconciliation.md): aggregate/KPI release-gate result.
+- [`reports/typed-date-e2e.md`](reports/typed-date-e2e.md): isolated Feishu typed-date write/read verification.
+- [`docs/WEB_APP_ARCHITECTURE.md`](docs/WEB_APP_ARCHITECTURE.md): minimal Next.js/application-service boundaries, write lifecycle, concurrency design, routes, and release gates; no UI implementation.
 - Other files under `docs/`: standards, schema, workflows, quality rules, views, and AI-skill refactor plan.
 
 ## Development

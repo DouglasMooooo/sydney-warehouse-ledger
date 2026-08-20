@@ -50,7 +50,8 @@ The release gate compared aggregate current-inventory totals, nine current-week 
 ## Verification
 
 - TypeScript strict build: PASS.
-- Automated tests: 18 passed.
+- Automated tests: 40 passed after approved review corrections and write-safety expansion.
+- Isolated Feishu typed-date write/read: PASS. The write carried a numeric date serial and `yyyy-mm-dd`; typed reread confirmed a date-compatible dtype, the same number format, and the expected business date.
 - Post-repair scanner: `FORMULA_MISSING = 0`, `FORMULA_BROKEN = 0`.
 - Business-cell snapshot comparison: PASS.
 - Current-inventory, weekly, and monthly reconciliation: PASS.
@@ -59,4 +60,17 @@ The release gate compared aggregate current-inventory totals, nine current-week 
 
 This phase intentionally does not implement work-order, Pickup Code, Return to Repair, Move, adjustment, label, or other operational writes. It also does not deploy warehouse-layout changes, Today Task views, dashboards, or AI skills.
 
-The next iteration may address warehouse-layout SKU visibility and derived views only after separate dry-run evidence and reconciliation safeguards are defined.
+The next implementation direction is the thin Warehouse Operations Web App described in `WEB_APP_ARCHITECTURE.md`. This correction pass does not start its UI.
+
+## Approved review corrections
+
+- `期初库存` and `入库` now require date, quantity, target location, and stock condition.
+- `移库`, `库存调增`, and `库存调减` now require date.
+- Remark normalisation is separate from identifier normalisation and preserves meaningful internal line breaks/tabs.
+- Explicit date writes carry `cell_styles.number_format`, require numeric date serials, use typed reread verification, and compare protected columns before/after business writes.
+- `verifyLedgerWrite()` checks exact business values, raw value types, date formats/effective dates, required formulas, protected state, and formula error results.
+- Non-dry-run business writes require a preview-time state fingerprint and immediately re-check it; changed relevant state returns `STALE_WRITE_CONFLICT`.
+- Future-row formula planning is formula-only, restricted to confirmed new rows, and requires two agreeing neighbouring patterns.
+- Strict normal work-order outbound validation remains unchanged. Exceptional quantity corrections are reserved for controlled adjustments.
+
+No additional spreadsheet workflow or view functionality was added.

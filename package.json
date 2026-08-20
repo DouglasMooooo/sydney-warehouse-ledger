@@ -9,7 +9,8 @@
     "audit": "tsx src/scripts/audit.ts",
     "formula:dry-run": "tsx src/scripts/dryRunFormulaRepair.ts",
     "formula:apply": "tsx src/scripts/applyFormulaRepair.ts",
-    "reconcile": "tsx src/scripts/reconcile.ts"
+    "reconcile": "tsx src/scripts/reconcile.ts",
+    "test:feishu-date": "tsx src/scripts/verifyDateWrite.ts"
   },
   "devDependencies": {
     "@types/node": "^24.3.0",

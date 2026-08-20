@@ -14,6 +14,8 @@ export interface NormalizedLedgerInput {
   toLocation?: string;
   erpWarehouse?: string;
   stockCondition?: StockCondition;
+  /** Current condition supplied by a trusted inventory lookup; never written to the ledger. */
+  sourceStockCondition?: StockCondition;
   remark?: string;
 }
 
@@ -57,8 +59,18 @@ export function validateLedgerInput(input: NormalizedLedgerInput): ValidationRes
   };
 
   switch (input.action) {
+    case '期初库存':
+    case '入库':
+      addRequired(errors, input, 'date', 'MISSING_DATE');
+      addRequired(errors, input, 'qty', 'INVALID_QTY');
+      addRequired(errors, input, 'toLocation', 'MISSING_TARGET_LOCATION');
+      addRequired(errors, input, 'stockCondition', 'INVALID_STOCK_CONDITION');
+      break;
     case '备货':
       preparedFields();
+      if (input.outboundDate !== undefined) {
+        errors.push({ code: 'PREPARED_OUTBOUND_DATE_MUST_BE_BLANK', field: 'outboundDate' });
+      }
       break;
     case '出库':
       preparedFields();
@@ -73,25 +85,38 @@ export function validateLedgerInput(input: NormalizedLedgerInput): ValidationRes
       if (input.stockCondition !== '待修') errors.push({ code: 'RETURN_REQUIRES_PENDING_REPAIR', field: 'stockCondition' });
       break;
     case '移库':
+      addRequired(errors, input, 'date', 'MISSING_DATE');
       addRequired(errors, input, 'qty', 'INVALID_QTY');
       addRequired(errors, input, 'fromLocation', 'MOVE_WITHOUT_SOURCE');
       addRequired(errors, input, 'toLocation', 'MOVE_WITHOUT_TARGET');
       addRequired(errors, input, 'stockCondition', 'INVALID_STOCK_CONDITION');
+      addRequired(errors, input, 'sourceStockCondition', 'MOVE_SOURCE_CONDITION_REQUIRED');
+      if (
+        input.sourceStockCondition !== undefined
+        && input.stockCondition !== undefined
+        && input.sourceStockCondition !== input.stockCondition
+      ) {
+        errors.push({ code: 'MOVE_CANNOT_CHANGE_STOCK_CONDITION', field: 'stockCondition' });
+      }
       break;
     case '库存调增':
+      addRequired(errors, input, 'date', 'MISSING_DATE');
       addRequired(errors, input, 'qty', 'INVALID_QTY');
       addRequired(errors, input, 'toLocation', 'ADJUSTMENT_WITHOUT_TARGET');
       addRequired(errors, input, 'stockCondition', 'INVALID_STOCK_CONDITION');
       break;
     case '库存调减':
+      addRequired(errors, input, 'date', 'MISSING_DATE');
       addRequired(errors, input, 'qty', 'INVALID_QTY');
       addRequired(errors, input, 'fromLocation', 'ADJUSTMENT_WITHOUT_SOURCE');
       addRequired(errors, input, 'stockCondition', 'INVALID_STOCK_CONDITION');
       break;
     default:
-      addRequired(errors, input, 'date', 'MISSING_DATE');
-      addRequired(errors, input, 'qty', 'INVALID_QTY');
-      addRequired(errors, input, 'stockCondition', 'INVALID_STOCK_CONDITION');
+      assertNever(input.action);
   }
   return { ok: errors.length === 0, errors };
+}
+
+function assertNever(value: never): never {
+  throw new Error(`Unhandled action: ${String(value)}`);
 }

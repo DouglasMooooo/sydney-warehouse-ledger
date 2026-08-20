@@ -5,6 +5,7 @@ export interface FeishuCell {
   data_type?: string;
   data_validation?: unknown;
   cell_styles?: { number_format?: string };
+  style?: { number_format?: string; formatter?: string };
 }
 
 export interface FeishuRange {
@@ -37,7 +38,22 @@ export interface ProposedChange {
   oldFormula?: string;
   newValue?: unknown;
   newFormula?: string;
+  valueType?: 'text' | 'number' | 'date';
+  numberFormat?: string;
   reason: string;
+}
+
+export interface TypedSheetData {
+  name: string;
+  range: string;
+  columns: string[];
+  data: Array<Array<string | number | boolean | null>>;
+  dtypes: Record<string, string>;
+  formats?: Record<string, string>;
+}
+
+export interface TableGetData {
+  sheets: TypedSheetData[];
 }
 
 export interface ExplicitWriteRequest {
@@ -46,5 +62,9 @@ export interface ExplicitWriteRequest {
   sheetName: string;
   purpose: 'BUSINESS_RECORD' | 'FORMULA_REPAIR';
   changes: ProposedChange[];
+  /** Required for non-dry-run business writes; captured during prepare/preview. */
+  precondition?: import('../ledger/optimisticConcurrency.js').LedgerStateSnapshot;
+  /** Formula addresses established by the future-row formula guard. */
+  requiredFormulaAddresses?: string[];
   dryRun: boolean;
 }

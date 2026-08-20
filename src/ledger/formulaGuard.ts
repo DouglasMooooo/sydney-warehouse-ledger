@@ -1,3 +1,4 @@
+import { PROTECTED_COLUMNS, type ProtectedColumn } from '../config/ledgerSchema.js';
 import type { FeishuCell, ProposedChange } from '../feishu/types.js';
 
 export const CONFIRMED_FORMULA_REPAIR_CELLS = [
@@ -5,6 +6,12 @@ export const CONFIRMED_FORMULA_REPAIR_CELLS = [
 ] as const;
 
 export type ConfirmedFormulaCell = (typeof CONFIRMED_FORMULA_REPAIR_CELLS)[number];
+
+export interface FutureRowFormulaPlan {
+  targetRow: number;
+  requiredFormulaAddresses: string[];
+  repairs: ProposedChange[];
+}
 
 const addressPattern = /^([A-Z]+)(\d+)$/;
 
@@ -47,6 +54,55 @@ export function buildFormulaRepairChanges(cells: Map<string, FeishuCell>): Propo
   });
 }
 
+/**
+ * Plans only formula repairs for a confirmed future append row. It never copies
+ * business values, and a formula is inferred only when two nearby formula
+ * patterns agree. Existing style and data validation are preserved because the
+ * resulting changes contain formula only.
+ */
+export function planFutureRowFormulaTemplate(
+  cells: Map<string, FeishuCell>,
+  targetRow: number,
+  targetIsConfirmedNewRow: boolean,
+  columns: readonly ProtectedColumn[] = PROTECTED_COLUMNS,
+): FutureRowFormulaPlan {
+  if (!targetIsConfirmedNewRow) throw new Error('Formula template planning is restricted to confirmed future rows');
+  if (!Number.isInteger(targetRow) || targetRow < 2) throw new Error('Invalid future target row');
+
+  const requiredFormulaAddresses: string[] = [];
+  const repairs: ProposedChange[] = [];
+  for (const column of columns) {
+    const neighbours = nearbyFormulas(cells, column, targetRow);
+    const targetAddress = `${column}${targetRow}`;
+    const target = cells.get(targetAddress) ?? {};
+    if (neighbours.length === 0) {
+      if (target.formula) throw new Error(`Unexpected formula in ${targetAddress} without a confirmed template`);
+      continue;
+    }
+    if (neighbours.length < 2) throw new Error(`Insufficient neighbouring formula evidence for ${targetAddress}`);
+    const inferred = inferRelativeFormula(
+      neighbours[0]!.formula, neighbours[0]!.row,
+      neighbours[1]!.formula, neighbours[1]!.row,
+      targetRow,
+    );
+    requiredFormulaAddresses.push(targetAddress);
+    if (target.formula) {
+      if (patternFor(target.formula, targetRow) !== patternFor(inferred, targetRow)) {
+        throw new Error(`Existing formula pattern differs in ${targetAddress}`);
+      }
+      continue;
+    }
+    repairs.push({
+      sheet: '主表 库存流水',
+      cell: targetAddress,
+      old: target.value ?? '',
+      newFormula: inferred,
+      reason: 'confirmed future-row formula template gap',
+    });
+  }
+  return { targetRow, requiredFormulaAddresses, repairs };
+}
+
 function nearestFormula(
   cells: Map<string, FeishuCell>, column: string, row: number, direction: -1 | 1,
 ): { row: number; formula: string } | undefined {
@@ -56,4 +112,19 @@ function nearestFormula(
     if (formula) return { row: candidateRow, formula };
   }
   return undefined;
+}
+
+function nearbyFormulas(
+  cells: Map<string, FeishuCell>, column: string, targetRow: number,
+): Array<{ row: number; formula: string }> {
+  const result: Array<{ row: number; formula: string }> = [];
+  for (let distance = 1; distance <= 25 && result.length < 2; distance += 1) {
+    for (const row of [targetRow - distance, targetRow + distance]) {
+      if (row < 1) continue;
+      const formula = cells.get(`${column}${row}`)?.formula;
+      if (formula) result.push({ row, formula });
+      if (result.length === 2) break;
+    }
+  }
+  return result;
 }

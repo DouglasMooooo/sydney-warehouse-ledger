@@ -2,7 +2,7 @@ import { LEDGER_COLUMNS, assertColumnWriteAllowed, type BusinessColumn } from '.
 import {
   normalizeAction, normalizeContainer, normalizeDate, normalizeLocation, normalizePickupCode,
   normalizeQty, normalizeSH, normalizeSKU, normalizeSN, normalizeStockCondition,
-  normalizeIdentifier, toFeishuDateSerial,
+  normalizeIdentifier, normalizeRemark, toFeishuDateSerial,
 } from './normalize.js';
 import { validateLedgerInput, type NormalizedLedgerInput, type ValidationError } from './validators.js';
 
@@ -20,6 +20,8 @@ export interface LedgerWriteInput {
   toLocation?: unknown;
   erpWarehouse?: unknown;
   stockCondition?: unknown;
+  /** Trusted current-state context for Move validation; this is not a ledger column. */
+  sourceStockCondition?: unknown;
   remark?: unknown;
 }
 
@@ -55,7 +57,8 @@ export function prepareLedgerWrite(input: LedgerWriteInput, dryRun = true): Prep
       toLocation: normalizeLocation(input.toLocation),
       erpWarehouse: normalizeIdentifier(input.erpWarehouse, 'erpWarehouse'),
       stockCondition: normalizeStockCondition(input.stockCondition),
-      remark: normalizeIdentifier(input.remark, 'remark'),
+      sourceStockCondition: normalizeStockCondition(input.sourceStockCondition),
+      remark: normalizeRemark(input.remark),
     }) as NormalizedLedgerInput;
   } catch (error) {
     return {

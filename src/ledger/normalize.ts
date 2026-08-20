@@ -17,6 +17,13 @@ export const normalizeSKU = (value: unknown) => normalizeIdentifier(value, 'sku'
 export const normalizeLocation = (value: unknown) => normalizeIdentifier(value, 'location');
 export const normalizeContainer = (value: unknown) => normalizeIdentifier(value, 'container');
 
+export function normalizeRemark(value: unknown): string | undefined {
+  if (value === undefined || value === null || value === '') return undefined;
+  if (typeof value !== 'string') throw new TypeError('remark must be text');
+  const normalized = value.replace(/[\u200B-\u200D\u2060\uFEFF]/g, '').trim();
+  return normalized || undefined;
+}
+
 export function normalizePickupCode(value: unknown): string | undefined {
   const normalized = normalizeIdentifier(value, 'pickupCode');
   if (normalized !== undefined && !/^SYD-\d{5}$/.test(normalized)) {
