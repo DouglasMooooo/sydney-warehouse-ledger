@@ -1,20 +1,21 @@
 import { NextResponse } from 'next/server';
 import { apiFailure, apiSuccess, clientSafeError, serverSafeErrorSummary } from '../../../../src/application/apiResponse';
-import { resolveWarehouseAuthContext } from '../../../../src/auth/authContext';
-import { requireWarehousePermission } from '../../../../src/auth/permissions';
+import { authenticateWarehouseRequest } from '../../../../src/auth/requestAuth';
 import { warehouseReadAdapterFromEnv } from '../../../../src/feishu/warehouseReadAdapter';
+import { operationalRequestLogger } from '../../../../src/observability/requestLog';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-export async function GET() {
+export async function GET(request: Request) {
+  const log = operationalRequestLogger(request, '/api/warehouse/layout');
   try {
-    const auth = resolveWarehouseAuthContext();
-    requireWarehousePermission(auth, 'INVENTORY_READ');
-    return NextResponse.json(apiSuccess(warehouseReadAdapterFromEnv().readLocationSummaries()));
+    const auth = authenticateWarehouseRequest(request, 'INVENTORY_READ'); log.setRole(auth.user.roles[0]);
+    const response = NextResponse.json(apiSuccess(await warehouseReadAdapterFromEnv().readLocationSummaries())); log.success(); return response;
   } catch (error) {
     console.error('Layout API failed', serverSafeErrorSummary(error));
     const safe = clientSafeError(error);
+    log.failure(safe.code);
     return NextResponse.json(apiFailure(safe.code, safe.message), { status: safe.code === 'AUTHENTICATION_REQUIRED' ? 401 : safe.code === 'PERMISSION_DENIED' ? 403 : 503 });
   }
 }

@@ -35,3 +35,7 @@ The browser does not decode the workbook, and uploaded bytes are not persisted o
 ## Operational boundary
 
 This hardening changes parsing, preview validation, tests, and documentation only. It does not create Prepared rows, reserve Pickup Codes, or write to the production Feishu ledger.
+
+## Private historical regression
+
+`npm run test:work-orders-private` reads a gitignored local manifest and real XLSX files through the production ExcelJS decoder and parser. It reports only fixture ordinals and aggregate outcomes. No private fixtures were available during Phase 2.5, so blank-row behavior remains deliberately conservative: the first blank row terminates Replacement parsing. A bounded spacer-row rule may be added only after real fixtures prove that legitimate ERP templates require it, with tests that still stop at every recognised section and never use Faulty Unit as fallback.

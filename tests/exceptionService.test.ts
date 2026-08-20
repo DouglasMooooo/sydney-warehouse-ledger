@@ -1,12 +1,12 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { detectContainerMismatches, deriveLedgerExceptions, OPERATIONAL_EXCEPTION_CODES } from '../src/application/exceptionService.js';
+import { DEEP_QUALITY_EXCEPTION_CODES, detectContainerMismatches, deriveLedgerExceptions, LIVE_OPERATIONAL_EXCEPTION_CODES } from '../src/application/exceptionService.js';
 import type { OperationalLedgerRow } from '../src/application/todayTasks.js';
 
-test('exception contract includes every Phase 2 rule code', () => {
-  for (const code of ['DATE_STORED_AS_TEXT', 'HIDDEN_CHARACTER', 'INVALID_ACTION', 'INVALID_STOCK_CONDITION', 'INVALID_LOCATION', 'INVALID_QTY', 'MISSING_SKU', 'MISSING_SN', 'PREPARED_WITHOUT_SOURCE_LOCATION', 'PREPARED_WITHOUT_PICKUP_CODE', 'PRODUCT_OUTBOUND_WITHOUT_SN', 'RETURN_WITHOUT_TARGET_LOCATION', 'MOVE_WITHOUT_SOURCE', 'MOVE_WITHOUT_TARGET', 'CONTAINER_MISMATCH', 'FORMULA_MISSING', 'FORMULA_BROKEN', 'VALIDATION_NOT_OK', 'MISSING_INVENTORY_QTY', 'INVALID_INVENTORY_QTY']) {
-    assert(OPERATIONAL_EXCEPTION_CODES.includes(code as never), code);
-  }
+test('exception contract truthfully separates live and deep rules', () => {
+  assert(LIVE_OPERATIONAL_EXCEPTION_CODES.includes('INVALID_ACTION'));
+  assert(!LIVE_OPERATIONAL_EXCEPTION_CODES.includes('FORMULA_MISSING' as never));
+  assert.deepEqual(DEEP_QUALITY_EXCEPTION_CODES, ['DATE_STORED_AS_TEXT', 'HIDDEN_CHARACTER', 'FORMULA_MISSING', 'FORMULA_BROKEN', 'VALIDATION_NOT_OK']);
 });
 
 test('ledger exceptions produce business DTOs without helper coordinates', () => {

@@ -1,7 +1,12 @@
 import { todayInSydney } from '../../../src/ledger/businessDate';
 import { WorkOrderPreviewClient } from './preview-client';
+import { authenticateWarehousePage } from '../../../src/auth/pageAuth';
 
-export default function WorkOrdersPage() {
+export const dynamic = 'force-dynamic';
+
+export default async function WorkOrdersPage() {
+  try { await authenticateWarehousePage('WORK_ORDER_PREVIEW'); }
+  catch { return <div className="notice error">需要有效且具备工单预览权限的飞书会话。</div>; }
   return (
     <>
       <header className="page-header">

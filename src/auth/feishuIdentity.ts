@@ -1,0 +1,76 @@
+import { createHash } from 'node:crypto';
+
+export interface VerifiedFeishuUser {
+  openId: string;
+  displayName?: string;
+}
+
+export interface FeishuIdentityProvider {
+  resolveUser(authCode: string, codeVerifier: string): Promise<VerifiedFeishuUser>;
+}
+
+export interface FeishuOAuthConfig {
+  appId: string;
+  appSecret: string;
+  redirectUri: string;
+  scopes?: string[];
+}
+
+export class FeishuIdentityError extends Error {
+  readonly code = 'AUTHENTICATION_REQUIRED';
+}
+
+export class FeishuOAuthIdentityProvider implements FeishuIdentityProvider {
+  constructor(private readonly config: FeishuOAuthConfig, private readonly fetchImpl: typeof fetch = fetch) {}
+
+  async resolveUser(authCode: string, codeVerifier: string): Promise<VerifiedFeishuUser> {
+    if (!authCode.trim() || !codeVerifier.trim()) throw new FeishuIdentityError('Invalid Feishu login code.');
+    const tokenResponse = await this.fetchImpl('https://accounts.feishu.cn/oauth/v3/token', {
+      method: 'POST', headers: { 'content-type': 'application/json; charset=utf-8' },
+      body: JSON.stringify({
+        grant_type: 'authorization_code', client_id: this.config.appId, client_secret: this.config.appSecret,
+        code: authCode, redirect_uri: this.config.redirectUri, code_verifier: codeVerifier,
+      }),
+    });
+    const token = await safeJson(tokenResponse) as { code?: number; access_token?: string; error?: string };
+    if (!tokenResponse.ok || token.code !== 0 || !token.access_token) throw new FeishuIdentityError('Feishu login code verification failed.');
+    const userResponse = await this.fetchImpl('https://open.feishu.cn/open-apis/authen/v1/user_info', {
+      headers: { authorization: `Bearer ${token.access_token}` },
+    });
+    const user = await safeJson(userResponse) as { code?: number; data?: { open_id?: string; name?: string } };
+    if (!userResponse.ok || user.code !== 0 || !user.data?.open_id) throw new FeishuIdentityError('Feishu user verification failed.');
+    const result: VerifiedFeishuUser = { openId: user.data.open_id };
+    if (user.data.name) result.displayName = user.data.name;
+    return result;
+  }
+}
+
+export function createFeishuAuthorizationUrl(config: FeishuOAuthConfig, state: string, codeVerifier: string): string {
+  const url = new URL('https://accounts.feishu.cn/open-apis/authen/v1/authorize');
+  url.searchParams.set('client_id', config.appId);
+  url.searchParams.set('response_type', 'code');
+  url.searchParams.set('redirect_uri', config.redirectUri);
+  url.searchParams.set('state', state);
+  url.searchParams.set('code_challenge_method', 'S256');
+  url.searchParams.set('code_challenge', createHash('sha256').update(codeVerifier).digest('base64url'));
+  if (config.scopes?.length) url.searchParams.set('scope', config.scopes.join(' '));
+  return url.toString();
+}
+
+export function feishuOAuthConfigFromEnv(env: Readonly<Record<string, string | undefined>> = process.env): FeishuOAuthConfig {
+  const appId = required(env, 'FEISHU_APP_ID');
+  const appSecret = required(env, 'FEISHU_APP_SECRET');
+  const redirectUri = required(env, 'FEISHU_OAUTH_REDIRECT_URI');
+  const scopes = (env.FEISHU_OAUTH_SCOPES ?? '').split(/[ ,]+/).filter(Boolean);
+  return scopes.length ? { appId, appSecret, redirectUri, scopes } : { appId, appSecret, redirectUri };
+}
+
+async function safeJson(response: Response): Promise<unknown> {
+  try { return await response.json(); } catch { throw new FeishuIdentityError('Invalid Feishu identity response.'); }
+}
+
+function required(env: Readonly<Record<string, string | undefined>>, name: string): string {
+  const value = env[name]?.trim();
+  if (!value) throw new FeishuIdentityError(`Missing server identity configuration: ${name}`);
+  return value;
+}

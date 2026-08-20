@@ -25,6 +25,7 @@ sheet_work/
 xlsx_processing/
 .phase1/
 reports/private/
+tests/fixtures/work-orders/private/
 
 # Local agent/app state
 .codex/

@@ -2,8 +2,7 @@ import { LiveDashboardQueryService } from '../../../src/application/dashboardSer
 import type { DashboardSnapshot } from '../../../src/application/contracts';
 import { warehouseReadAdapterFromEnv } from '../../../src/feishu/warehouseReadAdapter';
 import { todayInSydney } from '../../../src/ledger/businessDate';
-import { resolveWarehouseAuthContext } from '../../../src/auth/authContext';
-import { requireWarehousePermission } from '../../../src/auth/permissions';
+import { authenticateWarehousePage } from '../../../src/auth/pageAuth';
 
 export const dynamic = 'force-dynamic';
 
@@ -11,8 +10,7 @@ export default async function DashboardPage() {
   const today = todayInSydney();
   let snapshot: DashboardSnapshot | undefined;
   try {
-    const auth = resolveWarehouseAuthContext();
-    requireWarehousePermission(auth, 'DASHBOARD_READ');
+    await authenticateWarehousePage('DASHBOARD_READ');
     snapshot = await new LiveDashboardQueryService(warehouseReadAdapterFromEnv()).getSnapshot(today);
   } catch (error) {
     console.error('Dashboard source read failed', error);

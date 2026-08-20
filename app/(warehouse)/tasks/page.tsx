@@ -1,16 +1,14 @@
-import { resolveWarehouseAuthContext } from '../../../src/auth/authContext';
-import { requireWarehousePermission } from '../../../src/auth/permissions';
+import { authenticateWarehousePage } from '../../../src/auth/pageAuth';
 import { warehouseReadAdapterFromEnv } from '../../../src/feishu/warehouseReadAdapter';
 import { todayInSydney } from '../../../src/ledger/businessDate';
 import type { OperationalTask } from '../../../src/application/todayTasks';
 
 export const dynamic = 'force-dynamic';
 
-export default function TasksPage() {
+export default async function TasksPage() {
   try {
-    const auth = resolveWarehouseAuthContext();
-    requireWarehousePermission(auth, 'TASK_READ');
-    const snapshot = warehouseReadAdapterFromEnv().readTodayTasks(todayInSydney());
+    await authenticateWarehousePage('TASK_READ');
+    const snapshot = await warehouseReadAdapterFromEnv().readTodayTasks(todayInSydney());
     return <><PageHeader /><div className="section-grid">
       <TaskSection title="今日备货工单 · SH COUNT" tasks={snapshot.todayPrepared} />
       <TaskSection title="待取货（派生）· TASK COUNT" tasks={snapshot.awaitingPickup} />

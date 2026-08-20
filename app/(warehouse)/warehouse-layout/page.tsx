@@ -1,14 +1,12 @@
-import { resolveWarehouseAuthContext } from '../../../src/auth/authContext';
-import { requireWarehousePermission } from '../../../src/auth/permissions';
+import { authenticateWarehousePage } from '../../../src/auth/pageAuth';
 import { warehouseReadAdapterFromEnv } from '../../../src/feishu/warehouseReadAdapter';
 
 export const dynamic = 'force-dynamic';
 
-export default function WarehouseLayoutPage() {
+export default async function WarehouseLayoutPage() {
   try {
-    const auth = resolveWarehouseAuthContext();
-    requireWarehousePermission(auth, 'INVENTORY_READ');
-    const snapshot = warehouseReadAdapterFromEnv().readLocationSummaries();
+    await authenticateWarehousePage('INVENTORY_READ');
+    const snapshot = await warehouseReadAdapterFromEnv().readLocationSummaries();
     const groups = [
       { title: 'R1', locations: snapshot.locations.filter((item) => item.location.startsWith('R1-')) },
       { title: 'R2', locations: snapshot.locations.filter((item) => item.location.startsWith('R2-')) },

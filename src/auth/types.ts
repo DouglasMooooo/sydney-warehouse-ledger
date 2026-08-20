@@ -14,7 +14,6 @@ export interface WarehouseAuthContext {
   identitySource: IdentitySource;
 }
 
-/** Future server-side adapter for Feishu identity/session verification. */
 export interface WarehouseIdentityAdapter {
   resolve(request: Request): Promise<WarehouseAuthContext | undefined>;
 }

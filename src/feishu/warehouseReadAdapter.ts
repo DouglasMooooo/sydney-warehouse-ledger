@@ -7,12 +7,12 @@ import { deriveTodayTasks, type OperationalLedgerRow, type TodayTaskSnapshot } f
 import { formatLocationSummary, summarizeLocations, type LocationInventoryRecord, type LocationSummary } from '../application/locationSummary.js';
 import {
   deriveLedgerExceptions, detectContainerMismatches, inventoryIssuesToOperationalExceptions,
-  OPERATIONAL_EXCEPTION_CODES, type OperationalException,
+  LIVE_OPERATIONAL_EXCEPTION_CODES, type OperationalException,
 } from '../application/exceptionService.js';
 import { requiredEnv } from './client.js';
-import { readTypedTable } from './read.js';
 import type { TypedSheetData } from './types.js';
 import { parseSourceNumber } from './sourceValues.js';
+import { LarkCliWarehouseSheetReader, warehouseSheetReaderFromEnv, type WarehouseSheetReader } from './sheetReader.js';
 
 const MAIN = {
   date: 0, outboundDate: 1, action: 2, sh: 3, pickup: 4, container: 5,
@@ -27,10 +27,13 @@ export interface FeishuWarehouseReadConfig {
 }
 
 export class FeishuWarehouseReadAdapter implements WarehouseReadPort {
-  constructor(private readonly config: FeishuWarehouseReadConfig) {}
+  constructor(
+    private readonly config: FeishuWarehouseReadConfig,
+    private readonly reader: WarehouseSheetReader = new LarkCliWarehouseSheetReader(config.spreadsheetUrl),
+  ) {}
 
   async readDashboardSource(asOf: BusinessDate): Promise<DashboardSnapshot> {
-    const [main, inventory] = await Promise.all([this.readMain(), this.readInventory()]);
+    const [main, inventory, validLocations] = await Promise.all([this.readMain(), this.readInventory(), this.readValidLocations()]);
     const mainRows = main.data.slice(1).filter((row) => text(row[MAIN.action]));
     const inventoryModel = parseInventoryRecords(inventory);
     const inventoryRows = inventoryModel.records;
@@ -41,7 +44,6 @@ export class FeishuWarehouseReadAdapter implements WarehouseReadPort {
     const tasks = deriveTodayTasks(operationalRows, asOf);
     const rawInventory = rawInventoryRecords(inventory);
     const inventorySummary = summarizeLocations(rawInventory);
-    const validLocations = this.readValidLocations();
     const dashboardExceptions = [
       ...deriveLedgerExceptions(operationalRows, validLocations),
       ...inventoryIssuesToOperationalExceptions(inventorySummary.issues),
@@ -127,8 +129,7 @@ export class FeishuWarehouseReadAdapter implements WarehouseReadPort {
   }
 
   async findProduct(sku: string): Promise<ProductRecord | undefined> {
-    const table = readTypedTable({
-      spreadsheetUrl: this.config.spreadsheetUrl,
+    const table = await this.reader.readTable({
       sheetName: '产品库存维护',
     });
     const skuIndex = columnIndex(table, ['SKU', '料号', '物料号', '产品料号']);
@@ -143,25 +144,26 @@ export class FeishuWarehouseReadAdapter implements WarehouseReadPort {
     qty: number,
   ): Promise<InventoryCandidate[]> {
     void qty;
-    return parseInventoryRecords(this.readInventory()).records.filter((item) =>
+    return parseInventoryRecords(await this.readInventory()).records.filter((item) =>
       item.sku === sku && item.condition === stockCondition && item.availableQty > 0);
   }
 
   async readPickupCodes(): Promise<string[]> {
-    return this.readMain().data.slice(1).map((row) => text(row[MAIN.pickup])).filter(Boolean);
+    return (await this.readMain()).data.slice(1).map((row) => text(row[MAIN.pickup])).filter(Boolean);
   }
 
-  readTodayTasks(asOf: BusinessDate): TodayTaskSnapshot {
-    const rows = this.readMain().data.slice(1)
+  async readTodayTasks(asOf: BusinessDate): Promise<TodayTaskSnapshot> {
+    const rows = (await this.readMain()).data.slice(1)
       .filter((row) => text(row[MAIN.action]))
       .map((row, index) => toOperationalLedgerRow(row, index + 2));
     return deriveTodayTasks(rows, asOf);
   }
 
-  readLocationSummaries(): { locations: Array<LocationSummary & { displayText: string }>; issues: ReturnType<typeof summarizeLocations>['issues'] } {
-    const result = summarizeLocations(rawInventoryRecords(this.readInventory()));
+  async readLocationSummaries(): Promise<{ locations: Array<LocationSummary & { displayText: string }>; issues: ReturnType<typeof summarizeLocations>['issues'] }> {
+    const [inventory, validLocations] = await Promise.all([this.readInventory(), this.readValidLocations()]);
+    const result = summarizeLocations(rawInventoryRecords(inventory));
     const byLocation = new Map(result.summaries.map((summary) => [summary.location, summary]));
-    const locations = [...this.readValidLocations()].sort((left, right) => left.localeCompare(right));
+    const locations = [...validLocations].sort((left, right) => left.localeCompare(right));
     return {
       locations: locations.map((location) => {
         const summary = byLocation.get(location) ?? { location, totalQty: 0, skuLines: [], containers: [] };
@@ -171,49 +173,47 @@ export class FeishuWarehouseReadAdapter implements WarehouseReadPort {
     };
   }
 
-  readOperationalExceptions(): { exceptions: OperationalException[]; supportedCodes: readonly string[] } {
-    const main = this.readMain();
-    const inventory = rawInventoryRecords(this.readInventory());
+  async readOperationalExceptions(): Promise<{ exceptions: OperationalException[]; supportedCodes: readonly string[] }> {
+    const [main, inventoryTable, validLocations] = await Promise.all([this.readMain(), this.readInventory(), this.readValidLocations()]);
+    const inventory = rawInventoryRecords(inventoryTable);
     const rows = main.data.slice(1).filter((row) => text(row[MAIN.action]))
       .map((row, index) => toOperationalLedgerRow(row, index + 2));
     const summary = summarizeLocations(inventory);
-    const validLocations = this.readValidLocations();
     const exceptions = [
       ...deriveLedgerExceptions(rows, validLocations),
       ...inventoryIssuesToOperationalExceptions(summary.issues),
       ...detectContainerMismatches(inventory),
     ];
-    return { exceptions, supportedCodes: OPERATIONAL_EXCEPTION_CODES };
+    return { exceptions, supportedCodes: LIVE_OPERATIONAL_EXCEPTION_CODES };
   }
 
-  private readMain(): TypedSheetData {
-    return readTypedTable({
-      spreadsheetUrl: this.config.spreadsheetUrl,
+  private readMain(): Promise<TypedSheetData> {
+    return this.reader.readTable({
       sheetId: this.config.mainSheetId,
       noHeader: true,
     });
   }
 
-  private readInventory(): TypedSheetData {
-    return readTypedTable({
-      spreadsheetUrl: this.config.spreadsheetUrl,
+  private readInventory(): Promise<TypedSheetData> {
+    return this.reader.readTable({
       sheetId: this.config.currentInventorySheetId,
     });
   }
 
-  private readValidLocations(): Set<string> {
-    const table = readTypedTable({ spreadsheetUrl: this.config.spreadsheetUrl, sheetName: '库位维护' });
+  private async readValidLocations(): Promise<Set<string>> {
+    const table = await this.reader.readTable({ sheetName: '库位维护' });
     const location = columnIndex(table, ['库位编码（R-排-列-L/M/R）', '库位编码', 'Location']);
     return new Set(table.data.map((row) => text(row[location])).filter(Boolean));
   }
 }
 
 export function warehouseReadAdapterFromEnv(): FeishuWarehouseReadAdapter {
-  return new FeishuWarehouseReadAdapter({
-    spreadsheetUrl: requiredEnv('FEISHU_SPREADSHEET_URL'),
+  const config = {
+    spreadsheetUrl: process.env.FEISHU_SPREADSHEET_URL?.trim() ?? '',
     mainSheetId: requiredEnv('FEISHU_MAIN_SHEET_ID'),
     currentInventorySheetId: requiredEnv('FEISHU_CURRENT_INVENTORY_SHEET_ID'),
-  });
+  };
+  return new FeishuWarehouseReadAdapter(config, warehouseSheetReaderFromEnv());
 }
 
 export function parseInventoryRecords(table: TypedSheetData): { records: InventoryCandidate[]; missingQty: number; invalidQty: number } {

@@ -2,8 +2,7 @@ import Link from 'next/link';
 
 const navItems = [
   ['/dashboard', 'Dashboard'], ['/tasks', '今日任务'], ['/warehouse-layout', '仓库布局'],
-  ['/exceptions', '异常'], ['/work-orders', '工单 / 备货'], ['/returns', '旧机接收'],
-  ['/moves', '移库'], ['/adjustments', '库存调整'], ['/labels', 'Label'],
+  ['/exceptions', '异常'], ['/work-orders', '工单预览'],
 ] as const;
 
 export default function WarehouseLayout({ children }: Readonly<{ children: React.ReactNode }>) {
@@ -21,7 +20,7 @@ export default function WarehouseLayout({ children }: Readonly<{ children: React
         </nav>
         <div className="system-chip"><span /> Feishu ledger · system of record</div>
       </aside>
-      <main className="content-shell">{children}</main>
+      <main className="content-shell"><div className="read-only-banner">只读试运行</div>{children}</main>
     </div>
   );
 }

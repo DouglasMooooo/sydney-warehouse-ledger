@@ -3,14 +3,17 @@ import type { QualityIssue } from '../quality/types.js';
 import type { OperationalLedgerRow } from './todayTasks.js';
 import { ACTIONS, STOCK_CONDITIONS } from '../config/controlledValues.js';
 
-export const OPERATIONAL_EXCEPTION_CODES = [
-  'DATE_STORED_AS_TEXT', 'HIDDEN_CHARACTER', 'INVALID_ACTION', 'INVALID_STOCK_CONDITION',
+export const LIVE_OPERATIONAL_EXCEPTION_CODES = [
+  'INVALID_ACTION', 'INVALID_STOCK_CONDITION',
   'INVALID_LOCATION', 'INVALID_QTY', 'MISSING_SKU', 'MISSING_SN',
   'PREPARED_WITHOUT_SOURCE_LOCATION', 'PREPARED_WITHOUT_PICKUP_CODE',
   'PRODUCT_OUTBOUND_WITHOUT_SN', 'RETURN_WITHOUT_TARGET_LOCATION',
   'MOVE_WITHOUT_SOURCE', 'MOVE_WITHOUT_TARGET', 'CONTAINER_MISMATCH',
-  'FORMULA_MISSING', 'FORMULA_BROKEN', 'VALIDATION_NOT_OK',
   'MISSING_INVENTORY_QTY', 'INVALID_INVENTORY_QTY',
+] as const;
+
+export const DEEP_QUALITY_EXCEPTION_CODES = [
+  'DATE_STORED_AS_TEXT', 'HIDDEN_CHARACTER', 'FORMULA_MISSING', 'FORMULA_BROKEN', 'VALIDATION_NOT_OK',
 ] as const;
 
 export interface OperationalException {
@@ -83,10 +86,9 @@ export function deriveLedgerExceptions(
   validLocations: ReadonlySet<string> = new Set(),
 ): OperationalException[] {
   const result: OperationalException[] = [];
-  const hidden = /(^\s|\s$|[\r\n\t\u200B-\u200D\u2060\uFEFF])/;
   const add = (row: OperationalLedgerRow, code: string, description: string, currentValue?: string) => {
     const exception: OperationalException = {
-      severity: code === 'HIDDEN_CHARACTER' ? 'WARNING' : 'ERROR', code, ledgerRow: row.ledgerRow,
+    severity: 'ERROR', code, ledgerRow: row.ledgerRow,
       description, suggestedAction: 'Review the source row; do not bulk-fix historical data.',
     };
     if (row.sh) exception.sh = row.sh;
@@ -101,9 +103,6 @@ export function deriveLedgerExceptions(
     if (row.qty === undefined || !Number.isFinite(row.qty) || row.qty <= 0) add(row, 'INVALID_QTY', 'Qty is not a valid positive number.');
     const condition = (row as OperationalLedgerRow & { stockCondition?: string }).stockCondition ?? '';
     if (!STOCK_CONDITIONS.includes(condition as (typeof STOCK_CONDITIONS)[number])) add(row, 'INVALID_STOCK_CONDITION', 'Stock condition is outside the controlled list.', condition);
-    for (const value of [row.sh, row.pickupCode, row.sku, row.sn, row.fromLocation, row.toLocation]) {
-      if (value && hidden.test(value)) { add(row, 'HIDDEN_CHARACTER', 'Identifier contains hidden or boundary whitespace.'); break; }
-    }
     for (const location of [row.fromLocation, row.toLocation]) {
       if (location && validLocations.size > 0 && !validLocations.has(location)) add(row, 'INVALID_LOCATION', 'Location is absent from the location master.', location);
     }

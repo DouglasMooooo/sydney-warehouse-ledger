@@ -202,10 +202,12 @@ test('read and preview routes enforce explicit server permissions', () => {
     'app/api/warehouse/exceptions/route.ts': 'TASK_READ',
     'app/api/warehouse/layout/route.ts': 'INVENTORY_READ',
     'app/api/warehouse/work-orders/preview/route.ts': 'WORK_ORDER_PREVIEW',
+    'app/api/warehouse/work-orders/prepare/route.ts': 'WORK_ORDER_PREVIEW',
+    'app/api/warehouse/exceptions/deep-scan/route.ts': 'TASK_READ',
   };
   for (const [path, permission] of Object.entries(routes)) {
     const source = readFileSync(path, 'utf8');
-    assert(source.includes('requireWarehousePermission'));
+    assert(source.includes('authenticateWarehouseRequest'));
     assert(source.includes(`'${permission}'`));
     assert(!source.includes('writeExplicitCells'));
   }

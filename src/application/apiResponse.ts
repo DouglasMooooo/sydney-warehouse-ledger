@@ -24,6 +24,8 @@ export function clientSafeError(error: unknown): ApiErrorContract {
   if (hasErrorCode(error, 'PERMISSION_DENIED')) {
     return { code: 'PERMISSION_DENIED', message: '当前用户无权执行此操作。' };
   }
+  if (hasErrorCode(error, 'RATE_LIMITED')) return { code: 'RATE_LIMITED', message: '请求过于频繁，请稍后重试。' };
+  if (hasErrorCode(error, 'READ_ONLY_RELEASE')) return { code: 'READ_ONLY_RELEASE', message: '只读试运行期间禁止业务写入。' };
   if (message.includes('XLSX_NOT_SUPPORTED')) {
     return { code: 'XLSX_NOT_SUPPORTED', message: '当前仅支持文本原型，尚未启用 XLSX 上传。', field: 'sourceFileName' };
   }

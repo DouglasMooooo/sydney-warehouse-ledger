@@ -6,7 +6,7 @@ The project deliberately keeps the current ledger as the system of record. It do
 
 ## Current stage
 
-Phase 2 read-only warehouse operations is implemented and verified against the production workbook.
+Phase 2.5 authenticated read-only release preparation is implemented; production deployment/UAT configuration remains pending.
 
 - Strict TypeScript normalisation, controlled-value validation, protected-column guards, and typed write preparation are available for future workflows.
 - The read-only data-quality scanner emits privacy-safe JSON and Markdown reports.
@@ -19,10 +19,13 @@ Phase 2 read-only warehouse operations is implemented and verified against the p
 - GitHub Actions runs the pure typecheck, unit-test, and production-build gates without Feishu credentials; the reviewed baseline workflow completed successfully.
 - The Feishu Mini App target keeps secrets, ledger access, and command capability on the server and introduces no second inventory database.
 - The live Warehouse Layout now shows actual SKU quantities at all 136 physical/master locations; its helper/layout totals reconcile to current inventory.
-- Read and preview routes enforce explicit permissions. Production still fails closed until real Feishu session binding is implemented.
+- Real Feishu OAuth identity, server-side role mapping, signed short-lived sessions, and independent API permission checks are implemented and fail closed.
+- A hosted production read adapter uses official Feishu OpenAPI with a dedicated in-memory tenant-token cache; the local CLI reader remains available for development/admin scripts.
+- Live and deep exceptions are truthfully separated. Deep quality scanning is explicit, rate-limited, and returns a safe operational DTO.
+- `READ_ONLY_RELEASE=true`, the `只读试运行` banner, safe health status, bounded request logging, and private historical XLSX fixture support prepare read-only UAT.
 - No operational business writer has been activated.
 
-Return, Move, Adjustment, Label confirmation, real production authentication, and all AI/write actions remain explicitly deferred.
+Return, Move, Adjustment, Label confirmation, all AI/write actions, and every production business write remain explicitly deferred. Feishu console setup, HTTPS hosting, document permissions, and staff UAT are not claimed complete.
 
 ## Repository map
 
@@ -41,6 +44,9 @@ Return, Move, Adjustment, Label confirmation, real production authentication, an
 - [`docs/PARSER_HARDENING.md`](docs/PARSER_HARDENING.md): shared section rules, adversarial coverage, fail-closed preview rules, and XLSX capability boundary.
 - [`docs/FEISHU_MINI_APP_TARGET.md`](docs/FEISHU_MINI_APP_TARGET.md): future Mini App architecture, server security boundary, identity/roles, compatibility findings, and release gates.
 - [`docs/PHASE_2_OPERATIONAL_READ.md`](docs/PHASE_2_OPERATIONAL_READ.md): read-only modules, layout deployment, metric grains, XLSX boundary, permissions, and known limitations.
+- [`docs/PHASE_2_5_READ_ONLY_RELEASE.md`](docs/PHASE_2_5_READ_ONLY_RELEASE.md): authenticated read-only boundary, exception coverage, OpenAPI strategy, security, and remaining UAT blockers.
+- [`docs/FEISHU_DEPLOYMENT_CHECKLIST.md`](docs/FEISHU_DEPLOYMENT_CHECKLIST.md): exact internal H5 console, hosting, environment, security, and UAT steps.
+- [`reports/phase2_5-release-gate.md`](reports/phase2_5-release-gate.md): privacy-safe Phase 2.5 evidence and release decision.
 - [`reports/phase2-reconciliation.md`](reports/phase2-reconciliation.md): privacy-safe live layout and non-regression release gate.
 - Other files under `docs/`: standards, schema, workflows, quality rules, views, and AI-skill refactor plan.
 

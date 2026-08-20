@@ -121,3 +121,11 @@ test('XLSX malformed replacement rows warn and never invent values', () => {
   assert.deepEqual(parsed.replacementLines, []);
   assert.equal(parsed.warnings.length, 2);
 });
+
+test('blank row terminates Replacement parsing and later rows are never guessed', () => {
+  const parsed = parseXlsxWorkbookData({ sheets: [{ name: 'WO', rows: [
+    ['Replacement Unit information'], ['SKU', 'Qty', 'ERP Warehouse'], ['GOOD', 1, '悉尼良品仓'], [],
+    ['FAULTY-MUST-NOT-LEAK', 1, '悉尼良品仓'],
+  ] }] });
+  assert.deepEqual(parsed.replacementLines.map((line) => line.sku), ['GOOD']);
+});
