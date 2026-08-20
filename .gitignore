@@ -1,0 +1,35 @@
+# Credentials and local configuration
+.env
+.env.*
+*.pem
+*.key
+*auth*.json
+*token*
+*secret*
+
+# Operational and exported data
+*.xlsx
+*.xls
+*.csv
+*.tsv
+*.pdf
+*.png
+*.jpg
+*.jpeg
+*.zip
+output/
+outputs/
+tmp/
+sheet_work/
+xlsx_processing/
+
+# Local agent/app state
+.codex/
+.agents/
+
+# Runtime artifacts
+__pycache__/
+*.pyc
+.DS_Store
+Thumbs.db
+
