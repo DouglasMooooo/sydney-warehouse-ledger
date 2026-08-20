@@ -1,4 +1,5 @@
 import type { WorkOrderParser } from './parser.js';
+import { identifySectionHeading, WORK_ORDER_SECTION } from './sectionHeadings.js';
 import type { ParsedReplacementLine, ParsedWorkOrder } from './types.js';
 
 export interface XlsxWorksheetData {
@@ -37,12 +38,12 @@ export function parseXlsxWorkbookData(workbook: XlsxWorkbookData, sourceFileName
   let shNo: string | undefined;
   for (const sheet of workbook.sheets) {
     shNo ??= findSh(sheet.rows);
-    const titleRow = sheet.rows.findIndex((row) => row.some((cell) => text(cell) === 'Replacement Unit information'));
+    const titleRow = sheet.rows.findIndex((row) => rowSection(row) === WORK_ORDER_SECTION.REPLACEMENT_UNIT);
     if (titleRow < 0) continue;
     let headerRow = -1;
     for (let index = titleRow + 1; index < sheet.rows.length; index += 1) {
       const row = sheet.rows[index]!;
-      if (row.some((cell) => /information$/i.test(text(cell)))) break;
+      if (rowSection(row) !== undefined) break;
       if (headerIndexes(row)) { headerRow = index; break; }
     }
     if (headerRow < 0) {
@@ -52,7 +53,7 @@ export function parseXlsxWorkbookData(workbook: XlsxWorkbookData, sourceFileName
     const indexes = headerIndexes(sheet.rows[headerRow]!)!;
     for (let index = headerRow + 1; index < sheet.rows.length; index += 1) {
       const row = sheet.rows[index]!;
-      if (row.some((cell) => /information$/i.test(text(cell))) || row.every((cell) => !text(cell))) break;
+      if (rowSection(row) !== undefined || row.every((cell) => !text(cell))) break;
       const sku = text(row[indexes.sku]);
       const qtyText = text(row[indexes.qty]);
       const erpWarehouse = text(row[indexes.erpWarehouse]);
@@ -101,4 +102,12 @@ function findSh(rows: unknown[][]): string | undefined {
 
 function text(value: unknown): string {
   return typeof value === 'string' || typeof value === 'number' ? String(value).trim() : '';
+}
+
+function rowSection(row: unknown[]): ReturnType<typeof identifySectionHeading> {
+  for (const cell of row) {
+    const section = identifySectionHeading(cell);
+    if (section !== undefined) return section;
+  }
+  return undefined;
 }

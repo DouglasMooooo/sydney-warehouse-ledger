@@ -14,8 +14,10 @@ Phase 1 safe foundation is implemented and verified against the production workb
 - Post-repair current-inventory, weekly, and monthly reconciliation passed with no KPI changes.
 - Business dates and operation-scoped optimistic concurrency have been hardened for future writes.
 - A thin Next.js Web App provides the navigation shell, live read-only Dashboard, and a clearly labelled Work Order Preview Prototype. The preview performs zero writes.
-- Review fixes now fail closed for unknown ERP warehouses, isolate Replacement-section parsing, derive active pickup tasks from later Outbound activity, prefer consolidated inventory, and report malformed quantities.
-- GitHub Actions runs the pure typecheck, unit-test, and production-build gates without Feishu credentials.
+- Shared text/XLSX section detection now hardens the Replacement boundary against Faulty Unit and other recognised sections, including case, whitespace, and colon variants. Preview remains fail-closed.
+- Worksheet-matrix parsing is tested, but actual binary `.xlsx` upload remains disabled until a maintained decoder is implemented and verified.
+- GitHub Actions runs the pure typecheck, unit-test, and production-build gates without Feishu credentials; the reviewed baseline workflow completed successfully.
+- The Feishu Mini App target keeps secrets, ledger access, and command capability on the server and introduces no second inventory database.
 - No operational business writer has been activated.
 
 Return, Move, Adjustment, Label, warehouse-layout deployment, Today Task views, and AI write actions remain explicitly deferred.
@@ -34,6 +36,8 @@ Return, Move, Adjustment, Label, warehouse-layout deployment, Today Task views, 
 - [`docs/WEB_APP_ARCHITECTURE.md`](docs/WEB_APP_ARCHITECTURE.md): minimal Next.js/application-service boundaries, write lifecycle, concurrency design, routes, and release gates.
 - [`docs/WEB_APP_ITERATION_1.md`](docs/WEB_APP_ITERATION_1.md): implemented routes, read services, preview limits, security boundary, and next release gates.
 - [`docs/REVIEW_FIX_ITERATION.md`](docs/REVIEW_FIX_ITERATION.md): review findings, exact fixes, Dashboard metric definitions, parser/XLSX limitations, tests, and remaining write blockers.
+- [`docs/PARSER_HARDENING.md`](docs/PARSER_HARDENING.md): shared section rules, adversarial coverage, fail-closed preview rules, and XLSX capability boundary.
+- [`docs/FEISHU_MINI_APP_TARGET.md`](docs/FEISHU_MINI_APP_TARGET.md): future Mini App architecture, server security boundary, identity/roles, compatibility findings, and release gates.
 - Other files under `docs/`: standards, schema, workflows, quality rules, views, and AI-skill refactor plan.
 
 ## Development

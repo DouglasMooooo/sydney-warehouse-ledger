@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { apiFailure, apiSuccess, clientSafeError, serverSafeErrorSummary } from '../../../../../src/application/apiResponse';
 import { parseWorkOrderPreviewClientDto } from '../../../../../src/application/clientDtos';
 import { prepareWorkOrderPreview } from '../../../../../src/application/workOrderPreview';
 import { warehouseReadAdapterFromEnv } from '../../../../../src/feishu/warehouseReadAdapter';
@@ -9,13 +10,16 @@ export async function POST(request: Request) {
   try {
     const dto = parseWorkOrderPreviewClientDto(await request.json());
     const preview = await prepareWorkOrderPreview(dto, warehouseReadAdapterFromEnv());
-    return NextResponse.json(preview, { status: preview.errors.length > 0 ? 422 : 200 });
-  } catch (error) {
-    const message = String(error);
-    if (message.includes('UNSUPPORTED_CLIENT_FIELD') || error instanceof TypeError) {
-      return NextResponse.json({ error: `数据格式错误: ${message}` }, { status: 400 });
+    if (preview.errors.length > 0) {
+      const first = preview.errors[0]!;
+      return NextResponse.json(apiFailure(first.code, first.message), { status: 422 });
     }
-    console.error('Work order preview failed', error);
-    return NextResponse.json({ error: 'SYSTEM_READ_FAILED' }, { status: 503 });
+    return NextResponse.json(apiSuccess(preview));
+  } catch (error) {
+    const safe = clientSafeError(error);
+    console.error('Work order preview failed', serverSafeErrorSummary(error));
+    return NextResponse.json(apiFailure(safe.code, safe.message, safe.field), {
+      status: safe.code === 'SYSTEM_READ_FAILED' ? 503 : 400,
+    });
   }
 }

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, type ChangeEvent, type FormEvent } from 'react';
+import type { ApiResponse } from '../../../src/application/apiResponse';
 import type { WorkOrderPreview } from '../../../src/application/workOrderPreview';
 
 export function WorkOrderPreviewClient({ initialBusinessDate }: { initialBusinessDate: string }) {
@@ -26,9 +27,12 @@ export function WorkOrderPreviewClient({ initialBusinessDate }: { initialBusines
         method: 'POST', headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ businessDate, sourceText, ...(sourceFileName ? { sourceFileName } : {}) }),
       });
-      const payload = await response.json() as WorkOrderPreview | { error: string };
-      if (!response.ok || 'error' in payload) throw new Error('error' in payload ? payload.error : 'SYSTEM_READ_FAILED');
-      setPreview(payload);
+      const payload = await response.json() as ApiResponse<WorkOrderPreview>;
+      if (!response.ok || !payload.ok) {
+        const failure = payload.ok ? { code: 'SYSTEM_READ_FAILED', message: '系统读取失败' } : payload.error;
+        throw new Error(`${failure.code} · ${failure.message}`);
+      }
+      setPreview(payload.data);
     } catch (error) { setSystemError(String(error)); }
     finally { setLoading(false); }
   }

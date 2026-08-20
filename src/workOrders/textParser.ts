@@ -1,7 +1,6 @@
 import type { WorkOrderParser } from './parser.js';
+import { identifySectionHeading, WORK_ORDER_SECTION } from './sectionHeadings.js';
 import type { ParsedReplacementLine, ParsedWorkOrder, TextWorkOrderSource } from './types.js';
-
-const replacementTitle = 'replacement unit information';
 
 export class PlainTextWorkOrderParser implements WorkOrderParser<TextWorkOrderSource> {
   readonly format = 'text' as const;
@@ -13,7 +12,7 @@ export class PlainTextWorkOrderParser implements WorkOrderParser<TextWorkOrderSo
 
 export function parsePlainTextWorkOrder(source: TextWorkOrderSource): ParsedWorkOrder {
   const lines = source.sourceText.split(/\r?\n/);
-  const titleIndex = lines.findIndex((line) => line.trim().toLowerCase() === replacementTitle);
+  const titleIndex = lines.findIndex((line) => identifySectionHeading(line) === WORK_ORDER_SECTION.REPLACEMENT_UNIT);
   const shNo = findSh(lines);
   const warnings: string[] = [];
   const result: ParsedWorkOrder = { replacementLines: [], confidence: 'needs_confirmation', warnings };
@@ -34,8 +33,7 @@ export function parsePlainTextWorkOrder(source: TextWorkOrderSource): ParsedWork
 function sectionLines(lines: string[], start: number): Array<{ text: string; sourceRow: number }> {
   const result: Array<{ text: string; sourceRow: number }> = [];
   for (let index = start; index < lines.length; index += 1) {
-    const value = lines[index]!.trim();
-    if (/^[a-z ]+information\s*$/i.test(value)) break;
+    if (identifySectionHeading(lines[index]) !== undefined) break;
     result.push({ text: lines[index]!, sourceRow: index + 1 });
   }
   return result;

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import test from 'node:test';
 import { parseMoveClientDto, parseWorkOrderPreviewClientDto } from '../src/application/clientDtos.js';
 import type { DashboardSnapshot, InventoryCandidate, ProductRecord, WarehouseReadPort } from '../src/application/contracts.js';
@@ -52,6 +52,29 @@ test('Faulty Unit is never treated as Replacement and missing Replacement is blo
   }, new FakeReadPort());
   assert(preview.errors.some((error) => error.code === 'REPLACEMENT_NOT_CLEAR'));
   assert.equal(preview.zeroWritesPerformed, true);
+});
+
+test('preview remains fail-closed for multiple or malformed Replacement lines', async () => {
+  const multiple = await prepareWorkOrderPreview({
+    businessDate: BUSINESS_DATE,
+    sourceText: `${VALID_TEXT}\nReplacement Unit: 97-GOOD\nQty: 1\nERP Warehouse: 悉尼良品仓`,
+  }, new FakeReadPort());
+  assert(multiple.errors.some((error) => error.code === 'REPLACEMENT_NOT_CLEAR'));
+  assert.equal(multiple.proposedPreparedRow, undefined);
+
+  const malformed = await prepareWorkOrderPreview({
+    businessDate: BUSINESS_DATE,
+    sourceText: VALID_TEXT.replace('Qty: 1', 'Qty: many'),
+  }, new FakeReadPort());
+  assert(malformed.errors.some((error) => error.code === 'REPLACEMENT_NOT_CLEAR'));
+  assert.equal(malformed.proposedPreparedRow, undefined);
+
+  const missingSku = await prepareWorkOrderPreview({
+    businessDate: BUSINESS_DATE,
+    sourceText: VALID_TEXT.replace('Replacement Unit: 97-GOOD\n', ''),
+  }, new FakeReadPort());
+  assert(missingSku.errors.some((error) => error.code === 'REPLACEMENT_NOT_CLEAR'));
+  assert.equal(missingSku.proposedPreparedRow, undefined);
 });
 
 test('invalid SKU and insufficient stock are visible errors', async () => {
@@ -154,7 +177,18 @@ test('client DTO rejects trusted state, Date objects, and arbitrary cell coordin
 
 test('preview route exposes no raw Feishu write primitive or spreadsheet coordinates', () => {
   const route = readFileSync('app/api/warehouse/work-orders/prepare/route.ts', 'utf8');
-  assert(!route.includes('writeExplicitCells'));
-  assert(!route.includes('FEISHU_SPREADSHEET_URL'));
-  assert(!route.includes('ProposedChange'));
+  for (const forbidden of [
+    'writeExplicitCells', 'runLarkCli', 'spawnSync', 'FEISHU_APP_SECRET',
+    'tenant_access_token', 'FEISHU_SPREADSHEET_URL', 'ProposedChange',
+  ]) {
+    assert(!route.includes(forbidden), `explicit preview route must not expose ${forbidden}`);
+  }
+
+  for (const genericRoute of [
+    'app/api/write-cell/route.ts',
+    'app/api/run-command/route.ts',
+    'app/api/sheets-proxy/route.ts',
+  ]) {
+    assert.equal(existsSync(genericRoute), false, `${genericRoute} must never be exposed`);
+  }
 });

@@ -19,7 +19,7 @@ This iteration addresses the approved review findings without adding a business 
 
 ## Test and CI gates
 
-The pure suite contains 70 tests. Required parser, ERP mapping, date, Dashboard sequence/grouping, recommendation, numeric-source, normalization-field, formula, date-write, and concurrency regressions are covered. The GitHub Actions workflow runs `npm ci`, typecheck, unit tests, and the production build for pushes and pull requests. Live Feishu E2E remains separate/manual and CI contains no Feishu credential.
+The pure suite includes parser-boundary, ERP mapping, date, Dashboard sequence/grouping, recommendation, numeric-source, normalization-field, formula, date-write, concurrency, auth-policy, and API-sanitisation regressions. The GitHub Actions workflow runs `npm ci`, typecheck, unit tests, and the production build for pushes and pull requests. The reviewed baseline run completed successfully. Live Feishu E2E remains separate/manual and CI contains no Feishu credential.
 
 ## Remaining blockers
 
