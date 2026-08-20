@@ -4,7 +4,10 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "dev": "next dev --webpack",
+    "build": "tsc --noEmit -p tsconfig.json && next build --webpack",
+    "start": "next start",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "tsx --test tests/*.test.ts",
     "audit": "tsx src/scripts/audit.ts",
     "formula:dry-run": "tsx src/scripts/dryRunFormulaRepair.ts",
@@ -14,7 +17,14 @@
   },
   "devDependencies": {
     "@types/node": "^24.3.0",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.4",
     "tsx": "^4.20.5",
     "typescript": "^5.9.2"
+  },
+  "dependencies": {
+    "next": "^16.3.1",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8"
   }
 }

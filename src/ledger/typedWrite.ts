@@ -1,9 +1,10 @@
 import { LEDGER_COLUMNS, assertColumnWriteAllowed, type BusinessColumn } from '../config/ledgerSchema.js';
 import {
-  normalizeAction, normalizeContainer, normalizeDate, normalizeLocation, normalizePickupCode,
+  normalizeAction, normalizeContainer, normalizeLocation, normalizePickupCode,
   normalizeQty, normalizeSH, normalizeSKU, normalizeSN, normalizeStockCondition,
-  normalizeIdentifier, normalizeRemark, toFeishuDateSerial,
+  normalizeIdentifier, normalizeRemark,
 } from './normalize.js';
+import { normalizeBusinessDate, toFeishuDateSerial } from './businessDate.js';
 import { validateLedgerInput, type NormalizedLedgerInput, type ValidationError } from './validators.js';
 
 export interface LedgerWriteInput {
@@ -44,8 +45,8 @@ export function prepareLedgerWrite(input: LedgerWriteInput, dryRun = true): Prep
   let normalized: NormalizedLedgerInput;
   try {
     normalized = compact({
-      date: normalizeDate(input.date),
-      outboundDate: normalizeDate(input.outboundDate),
+      date: normalizeBusinessDate(input.date),
+      outboundDate: normalizeBusinessDate(input.outboundDate),
       action: normalizeAction(input.action),
       shNo: normalizeSH(input.shNo),
       pickupCode: normalizePickupCode(input.pickupCode),

@@ -1,5 +1,5 @@
-import type { ProposedChange } from '../feishu/types.js';
-import type { LedgerStateSnapshot } from '../ledger/optimisticConcurrency.js';
+import type { BusinessDate } from '../ledger/businessDate.js';
+import type { OperationPrecondition } from '../ledger/optimisticConcurrency.js';
 import type { NormalizedLedgerInput, ValidationError } from '../ledger/validators.js';
 
 export interface ActorContext {
@@ -7,12 +7,11 @@ export interface ActorContext {
   displayName: string;
 }
 
+/** Internal-only prepare result. Never serialize this object to the browser. */
 export interface PreparedCommand<T> {
-  previewToken: string;
   input: T;
   normalized: NormalizedLedgerInput;
-  proposedChanges: ProposedChange[];
-  sourceState: LedgerStateSnapshot;
+  operationPrecondition: OperationPrecondition;
   warnings: ValidationError[];
 }
 
@@ -27,14 +26,70 @@ export interface ConfirmedLedgerOperation {
   reconciliation: 'PASS';
 }
 
-export interface InventoryQueryService {
-  getBySerialNumber(sn: string): Promise<unknown>;
-  getAvailableBySku(sku: string): Promise<unknown[]>;
-  getDashboardSnapshot(asOf: Date): Promise<DashboardSnapshot>;
+export interface InventoryCandidate {
+  sku: string;
+  model: string;
+  location: string;
+  container?: string;
+  availableQty: number;
+  condition: '新机' | '维修良品' | '待修' | '报废' | '物料';
 }
 
-export interface WorkOrderService<TInput = unknown> {
-  prepare(input: TInput, actor: ActorContext): Promise<PreparedCommand<TInput>>;
+export interface ProductRecord {
+  sku: string;
+  model: string;
+}
+
+export interface DashboardSnapshot {
+  businessDate: BusinessDate;
+  metrics: {
+    todayNewWorkOrders: number;
+    awaitingPreparation: number | null;
+    awaitingPickup: number;
+    shippedToday: number;
+    returnedToday: number;
+    exceptionCount: number;
+  };
+  inventory: {
+    newUnits: number;
+    repairedGood: number;
+    pendingRepair: number;
+    repairInventory: number;
+    scrapped: number;
+  };
+  inventoryByModel: Array<{ model: string; condition: string; availableQty: number }>;
+  recentPrepared: Array<{ businessDate: string; sh: string; sku: string; qty: number; location: string; pickupCode: string }>;
+  recentReturns: Array<{ businessDate: string; sku: string; qty: number; location: string }>;
+  exceptions: Array<{ code: string; count: number }>;
+  notes: string[];
+}
+
+/** Read-only port: it intentionally has no write/append method. */
+export interface WarehouseReadPort {
+  readDashboardSource(asOf: BusinessDate): Promise<DashboardSnapshot>;
+  findProduct(sku: string): Promise<ProductRecord | undefined>;
+  findAvailableInventory(
+    sku: string,
+    stockCondition: InventoryCandidate['condition'],
+    qty: number,
+  ): Promise<InventoryCandidate[]>;
+  readPickupCodes(): Promise<string[]>;
+}
+
+export interface InventoryQueryService {
+  getAvailableBySku(
+    sku: string,
+    stockCondition: InventoryCandidate['condition'],
+    qty: number,
+  ): Promise<InventoryCandidate[]>;
+}
+
+export interface DashboardQueryService {
+  getSnapshot(asOf: BusinessDate): Promise<DashboardSnapshot>;
+}
+
+export interface WorkOrderService<TInput = unknown, TPreview = unknown> {
+  prepare(input: TInput, actor?: ActorContext): Promise<TPreview>;
   confirm(command: ConfirmCommand): Promise<ConfirmedLedgerOperation>;
 }
 
@@ -55,36 +110,14 @@ export interface AdjustmentService<TInput = unknown> {
 
 export interface PickupCodeCandidate {
   code: string;
-  sourceState: LedgerStateSnapshot;
+  committed: false;
 }
 
 export interface PickupCodeService {
   prepareCandidate(): Promise<PickupCodeCandidate>;
-  recheckOrRegenerate(candidate: PickupCodeCandidate): Promise<PickupCodeCandidate>;
-  verifyGloballyUnique(code: string): Promise<boolean>;
 }
 
 export interface LabelService<TInput = unknown, TPreview = unknown> {
   prepare(input: TInput, actor: ActorContext): Promise<TPreview>;
   confirm(command: ConfirmCommand): Promise<Uint8Array>;
-}
-
-export interface DashboardSnapshot {
-  todayNewWorkOrders: number;
-  awaitingPreparation: number;
-  awaitingPickup: number;
-  shippedToday: number;
-  returnedToday: number;
-  exceptionCount: number;
-  inventory: {
-    newUnits: number;
-    repairedGood: number;
-    pendingRepair: number;
-    repairInventory: number;
-    scrapped: number;
-  };
-}
-
-export interface DashboardQueryService {
-  getSnapshot(asOf: Date): Promise<DashboardSnapshot>;
 }

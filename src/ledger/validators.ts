@@ -1,8 +1,9 @@
 import type { LedgerAction, StockCondition } from '../config/controlledValues.js';
+import type { BusinessDate } from './businessDate.js';
 
 export interface NormalizedLedgerInput {
-  date?: Date;
-  outboundDate?: Date;
+  date?: BusinessDate;
+  outboundDate?: BusinessDate;
   action?: LedgerAction;
   shNo?: string;
   pickupCode?: string;

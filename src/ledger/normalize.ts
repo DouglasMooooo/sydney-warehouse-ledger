@@ -1,4 +1,8 @@
 import { isLedgerAction, isStockCondition, type LedgerAction, type StockCondition } from '../config/controlledValues.js';
+export {
+  businessDateFromSydneyDate, normalizeBusinessDate, todayInSydney, toFeishuDateSerial,
+  type BusinessDate,
+} from './businessDate.js';
 
 const forbiddenCharacters = /[\r\n\t\u200B-\u200D\u2060\uFEFF]/g;
 
@@ -37,29 +41,6 @@ export function normalizeQty(value: unknown): number | undefined {
   const normalized = typeof value === 'number' ? value : Number(String(value).trim());
   if (!Number.isFinite(normalized)) throw new TypeError('qty must be numeric');
   return normalized;
-}
-
-export function normalizeDate(value: unknown): Date | undefined {
-  if (value === undefined || value === null || value === '') return undefined;
-  let date: Date;
-  if (value instanceof Date) {
-    date = new Date(Date.UTC(value.getFullYear(), value.getMonth(), value.getDate()));
-  } else if (typeof value === 'string') {
-    const match = /^(\d{4})[-/](\d{1,2})[-/](\d{1,2})$/.exec(value.trim());
-    if (!match) throw new TypeError('date must be YYYY-MM-DD or YYYY/M/D');
-    date = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])));
-    if (date.getUTCFullYear() !== Number(match[1]) || date.getUTCMonth() !== Number(match[2]) - 1 || date.getUTCDate() !== Number(match[3])) {
-      throw new TypeError('date is invalid');
-    }
-  } else {
-    throw new TypeError('date must be a Date or date text');
-  }
-  if (Number.isNaN(date.getTime())) throw new TypeError('date is invalid');
-  return date;
-}
-
-export function toFeishuDateSerial(date: Date): number {
-  return Math.floor((Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()) - Date.UTC(1899, 11, 30)) / 86_400_000);
 }
 
 export function normalizeAction(value: unknown): LedgerAction | undefined {

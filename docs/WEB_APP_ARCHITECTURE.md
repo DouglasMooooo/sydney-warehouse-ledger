@@ -19,15 +19,15 @@ Keep the repository simple and reuse the current `src/` modules instead of movin
 ```text
 app/
   (warehouse)/
-    dashboard/page.tsx
-    work-orders/page.tsx
+    dashboard/page.tsx             # implemented: live, read-only
+    work-orders/page.tsx           # implemented: preview only
     returns/page.tsx
     moves/page.tsx
     adjustments/page.tsx
     labels/page.tsx
   api/warehouse/
     work-orders/prepare/route.ts
-    work-orders/confirm/route.ts
+    work-orders/confirm/route.ts   # intentionally absent until release gates pass
     returns/prepare/route.ts
     returns/confirm/route.ts
     moves/prepare/route.ts
@@ -39,9 +39,10 @@ app/
 
 src/
   application/
-    contracts.ts                 # interfaces only today
-    services/                    # future implementations
-    ports/WarehouseLedgerPort.ts # future Feishu boundary
+    contracts.ts                 # business-shaped ports and service contracts
+    clientDtos.ts                # strict untrusted browser DTO allowlists
+    dashboardService.ts          # live read-through dashboard query
+    workOrderPreview.ts          # deterministic PREVIEW_ONLY workflow
   config/                        # existing ledger schema/controlled values
   ledger/                        # existing domain and safety layer
   feishu/                        # existing CLI adapter primitives
@@ -56,7 +57,7 @@ Do not create a second app, microservices, or a database package. React componen
 
 ## Application-service boundaries
 
-Executable interface proposals live in `src/application/contracts.ts`:
+Executable interfaces live in `src/application/contracts.ts`:
 
 - `DashboardQueryService`: read-only operational and inventory snapshot.
 - `InventoryQueryService`: lookup by SN/SKU and real available location/container.
@@ -67,7 +68,7 @@ Executable interface proposals live in `src/application/contracts.ts`:
 - `PickupCodeService`: deterministic `SYD-00000` allocation with recheck/retry; AI never chooses a code.
 - `LabelService`: deterministic output from confirmed and verified Prepared rows only.
 
-Every mutating service exposes `prepare(...)` and `confirm(...)`:
+Future mutating services expose `prepare(...)` and `confirm(...)`:
 
 - `prepare` is read-only. It normalises, validates, queries current state, plans formula requirements, captures the relevant state fingerprint/revision, and returns a signed short-lived preview token.
 - `confirm` verifies the token and actor, re-reads the relevant state immediately before writing, and returns `STALE_WRITE_CONFLICT` when the fingerprint changed.
@@ -80,10 +81,10 @@ The future `WarehouseLedgerPort` should expose business-shaped methods, never ar
 
 ```ts
 interface WarehouseLedgerPort {
-  readDashboard(asOf: Date): Promise<DashboardSnapshot>;
+  readDashboard(asOf: BusinessDate): Promise<DashboardSnapshot>;
   readInventoryContext(query: InventoryQuery): Promise<InventoryContext>;
   inspectAppendTarget(): Promise<AppendTargetInspection>;
-  captureState(range: string): Promise<LedgerStateSnapshot>;
+  captureOperationState(command: OperationContext): Promise<OperationPrecondition>;
   commitVerifiedRow(command: VerifiedRowCommand): Promise<LedgerWriteReceipt>;
   verifyWrite(receipt: LedgerWriteReceipt): Promise<LedgerWriteVerificationResult>;
   reconcile(receipt: LedgerWriteReceipt): Promise<ReconciliationResult>;
@@ -112,9 +113,13 @@ READ context + append target
 
 For a future new row, formula provisioning is restricted to protected columns and a confirmed append target. `planFutureRowFormulaTemplate()` requires two agreeing neighbouring formula patterns, emits formula-only repairs, and fails on disagreement or insufficient evidence. It never copies historical business values and never performs whole-column fill.
 
+## Business dates
+
+`BusinessDate` is a branded canonical `YYYY-MM-DD` calendar value. The normal browser and application path accepts strings only; JavaScript `Date`, timestamps, and invalid calendar dates are rejected. Explicit `Date` conversion uses the `Australia/Sydney` timezone. Feishu serials are calculated directly from UTC calendar components, so the effective ledger date is independent of the Node process timezone and Sydney daylight-saving transitions.
+
 ## Optimistic concurrency
 
-`createLedgerStateSnapshot()` fingerprints the relevant values, formulas, styles, formats and data validation while retaining the Feishu revision for audit. `confirm` re-captures the same range immediately before writing. A changed relevant fingerprint throws `STALE_WRITE_CONFLICT`; a workbook revision change outside the relevant range does not unnecessarily block the operation.
+Browser and route code cannot provide an arbitrary range. The application constructs an `OperationPrecondition` containing one exact target row plus named dependencies required by that operation, such as current inventory, serial history/current state, inventory selection, or Pickup Code uniqueness. The Feishu write adapter re-reads every target/dependency snapshot immediately before a business write. A changed dependency throws `STALE_WRITE_CONFLICT`; an unrelated snapshot cannot authorize a target-row write.
 
 Pickup Code allocation remains inactive. Its future transaction is:
 
@@ -136,7 +141,9 @@ Pickup Code allocation remains inactive. Its future transaction is:
 | `/adjustments` | Controlled increase/decrease workflows; no irregular outbound bypass |
 | `/labels` | Deterministic label preview from confirmed Prepared records |
 
-All dashboard and inventory values come from the existing ledger/current-inventory/report sources.
+All dashboard and inventory values come from the existing ledger/current-inventory sources. There is no cache, shadow status, or inventory database. `待备货` is shown as unavailable because the current ledger has no pre-prepared status record.
+
+The implemented Prepared preview accepts a work-order text/file and optional explicit business fields, validates the Replacement SKU against Product Master, maps ERP warehouse to an allowed stock condition by a deterministic server rule, recommends only an actual matching current-inventory location/container, and previews the next Pickup Code. It performs zero writes and exposes no confirm endpoint.
 
 ## Release gates and current blockers
 

@@ -62,8 +62,8 @@ export interface ExplicitWriteRequest {
   sheetName: string;
   purpose: 'BUSINESS_RECORD' | 'FORMULA_REPAIR';
   changes: ProposedChange[];
-  /** Required for non-dry-run business writes; captured during prepare/preview. */
-  precondition?: import('../ledger/optimisticConcurrency.js').LedgerStateSnapshot;
+  /** Required for non-dry-run business writes; captured server-side during prepare/preview. */
+  operationPrecondition?: import('../ledger/optimisticConcurrency.js').OperationPrecondition;
   /** Formula addresses established by the future-row formula guard. */
   requiredFormulaAddresses?: string[];
   dryRun: boolean;

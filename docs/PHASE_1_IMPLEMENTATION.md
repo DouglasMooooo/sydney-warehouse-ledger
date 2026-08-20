@@ -9,7 +9,7 @@ The first safe implementation foundation is complete. The production change was 
 - Executable ledger schema with business and protected column allowlists.
 - Controlled actions and stock conditions.
 - Forward-looking normalisers for dates, SH numbers, Pickup Codes, containers, SKUs, SNs, locations, quantities, actions, and stock conditions.
-- Dates are proposed as Feishu numeric date serials with a date number format; SKUs remain text.
+- Dates use branded `YYYY-MM-DD` calendar values and are proposed as Feishu numeric date serials with a date number format; SKUs remain text.
 - Deterministic action-specific validation with structured error codes.
 - `prepareLedgerWrite()` returns typed proposed business cells only. It is not connected to an operational workflow and does not expose an arbitrary business-cell writer.
 - Explicit Feishu range reads, formula reads, dry-run changes, protected-column guards, atomic explicit-cell writes, and post-write verification.
@@ -50,7 +50,7 @@ The release gate compared aggregate current-inventory totals, nine current-week 
 ## Verification
 
 - TypeScript strict build: PASS.
-- Automated tests: 40 passed after approved review corrections and write-safety expansion.
+- Automated tests: 52 passed after approved review corrections, date/concurrency hardening, and Web App preview expansion.
 - Isolated Feishu typed-date write/read: PASS. The write carried a numeric date serial and `yyyy-mm-dd`; typed reread confirmed a date-compatible dtype, the same number format, and the expected business date.
 - Post-repair scanner: `FORMULA_MISSING = 0`, `FORMULA_BROKEN = 0`.
 - Business-cell snapshot comparison: PASS.
@@ -58,9 +58,9 @@ The release gate compared aggregate current-inventory totals, nine current-week 
 
 ## Limitations and next phase
 
-This phase intentionally does not implement work-order, Pickup Code, Return to Repair, Move, adjustment, label, or other operational writes. It also does not deploy warehouse-layout changes, Today Task views, dashboards, or AI skills.
+This phase intentionally does not implement work-order, Pickup Code, Return to Repair, Move, adjustment, label, or other operational writes. The first Web App iteration adds a read-only dashboard and Work Order / Prepared preview only; other modules remain placeholders.
 
-The next implementation direction is the thin Warehouse Operations Web App described in `WEB_APP_ARCHITECTURE.md`. This correction pass does not start its UI.
+The thin Warehouse Operations Web App described in `WEB_APP_ARCHITECTURE.md` has begun under the same repository and safety layer.
 
 ## Approved review corrections
 

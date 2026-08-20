@@ -39,12 +39,31 @@ export function readCells(input: ReadRangeInput): Map<string, FeishuCell> {
 }
 
 export function readTypedRange(input: Omit<ReadRangeInput, 'include'>): TypedSheetData {
+  return readTypedTable({ ...input, noHeader: true });
+}
+
+export interface ReadTypedTableInput {
+  spreadsheetUrl: string;
+  sheetId?: string;
+  sheetName?: string;
+  range?: string;
+  noHeader?: boolean;
+}
+
+export function readTypedTable(input: ReadTypedTableInput): TypedSheetData {
+  if ((input.sheetId === undefined) === (input.sheetName === undefined)) {
+    throw new Error('Exactly one of sheetId/sheetName is required');
+  }
+  const args = ['sheets', '+table-get', '--url', input.spreadsheetUrl];
+  if (input.sheetId) args.push('--sheet-id', input.sheetId);
+  if (input.sheetName) args.push('--sheet-name', input.sheetName);
+  if (input.range) args.push('--range', input.range);
+  if (input.noHeader) args.push('--no-header');
   const envelope = runLarkCli<LarkEnvelope<TableGetData>>([
-    'sheets', '+table-get', '--url', input.spreadsheetUrl, '--sheet-id', input.sheetId,
-    '--range', input.range, '--no-header',
+    ...args,
   ]);
-  if (!envelope.ok) throw new Error(envelope.error?.message ?? 'Feishu typed read failed');
+  if (!envelope.ok) throw new Error(envelope.error?.message ?? 'Feishu typed table read failed');
   const sheet = envelope.data.sheets[0];
-  if (!sheet) throw new Error(`No typed sheet returned for ${input.range}`);
+  if (!sheet) throw new Error(`No typed sheet returned${input.range ? ` for ${input.range}` : ''}`);
   return sheet;
 }

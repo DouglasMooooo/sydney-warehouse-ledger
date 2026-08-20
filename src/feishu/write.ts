@@ -1,6 +1,7 @@
 import { PROTECTED_COLUMNS, assertColumnWriteAllowed } from '../config/ledgerSchema.js';
 import {
-  assertLedgerStateFresh, createLedgerStateSnapshot, type LedgerStateSnapshot,
+  assertOperationPreconditionFresh, createLedgerStateSnapshot, createOperationPrecondition,
+  type DependencyKind, type LedgerStateSnapshot, type OperationKind, type OperationPrecondition,
 } from '../ledger/optimisticConcurrency.js';
 import { runLarkCli } from './client.js';
 import { cellsByAddress, readCells, readRange, readTypedRange } from './read.js';
@@ -35,7 +36,7 @@ export interface VerifyLedgerWriteInput {
   requiredFormulaAddresses?: string[];
 }
 
-export function captureWritePrecondition(
+function captureWritePrecondition(
   spreadsheetUrl: string, sheetId: string, range: string,
 ): LedgerStateSnapshot {
   const data = readRange({
@@ -43,6 +44,31 @@ export function captureWritePrecondition(
     include: ['value', 'formula', 'style', 'data_validation'],
   });
   return createLedgerStateSnapshot(range, cellsByAddress(data), data.revision);
+}
+
+export interface OperationDependencyScope {
+  kind: DependencyKind;
+  range: string;
+}
+
+/** Internal adapter primitive. High-level callers provide business context, not a target range. */
+export function captureOperationPrecondition(
+  spreadsheetUrl: string,
+  sheetId: string,
+  operationKind: OperationKind,
+  targetRow: number,
+  dependencies: OperationDependencyScope[],
+): OperationPrecondition {
+  const target = captureWritePrecondition(spreadsheetUrl, sheetId, `A${targetRow}:AC${targetRow}`);
+  return createOperationPrecondition(
+    operationKind,
+    targetRow,
+    target,
+    dependencies.map((dependency) => ({
+      kind: dependency.kind,
+      snapshot: captureWritePrecondition(spreadsheetUrl, sheetId, dependency.range),
+    })),
+  );
 }
 
 export function writeExplicitCells(request: ExplicitWriteRequest): WriteResult {
@@ -64,11 +90,20 @@ export function writeExplicitCells(request: ExplicitWriteRequest): WriteResult {
   }
 
   if (request.purpose === 'BUSINESS_RECORD') {
-    if (!request.precondition) throw new Error('Business write requires an optimistic concurrency precondition');
-    const currentState = captureWritePrecondition(
-      request.spreadsheetUrl, request.sheetId, request.precondition.range,
+    const expected = request.operationPrecondition;
+    if (!expected) throw new Error('Business write requires an operation-scoped precondition');
+    const targetRows = new Set(request.changes.map((change) => Number(addressPattern.exec(change.cell)![2])));
+    if (targetRows.size !== 1 || !targetRows.has(expected.targetRow)) {
+      throw new Error('Business changes must target the precondition ledger row');
+    }
+    const current = captureOperationPrecondition(
+      request.spreadsheetUrl,
+      request.sheetId,
+      expected.operationKind,
+      expected.targetRow,
+      expected.dependencies.map((dependency) => ({ kind: dependency.kind, range: dependency.snapshot.range })),
     );
-    assertLedgerStateFresh(request.precondition, currentState);
+    assertOperationPreconditionFresh(expected, current);
   }
 
   const businessRows = request.purpose === 'BUSINESS_RECORD'

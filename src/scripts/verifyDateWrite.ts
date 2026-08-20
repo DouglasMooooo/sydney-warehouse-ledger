@@ -1,7 +1,7 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { runLarkCli } from '../feishu/client.js';
 import type { LarkEnvelope, ProposedChange } from '../feishu/types.js';
-import { captureWritePrecondition, writeExplicitCells } from '../feishu/write.js';
+import { captureOperationPrecondition, writeExplicitCells } from '../feishu/write.js';
 import { prepareLedgerWrite } from '../ledger/typedWrite.js';
 
 interface WorkbookCreateData {
@@ -45,11 +45,17 @@ const changes: ProposedChange[] = prepared.proposedCells.map((cell) => {
   return change;
 });
 if (!changes.some((change) => change.valueType === 'date')) throw new Error('Prepared write did not contain a date cell');
-const precondition = captureWritePrecondition(spreadsheetUrl, sheet.sheet_id, 'A2:AC2');
+const operationPrecondition = captureOperationPrecondition(
+  spreadsheetUrl,
+  sheet.sheet_id,
+  'ADJUSTMENT',
+  2,
+  [{ kind: 'CURRENT_INVENTORY', range: 'A1:AC1' }],
+);
 
 const result = writeExplicitCells({
   spreadsheetUrl, sheetId: sheet.sheet_id, sheetName,
-  purpose: 'BUSINESS_RECORD', changes, precondition, dryRun: false,
+  purpose: 'BUSINESS_RECORD', changes, operationPrecondition, dryRun: false,
 });
 mkdirSync('reports', { recursive: true });
 writeFileSync('reports/typed-date-e2e.md', [

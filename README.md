@@ -12,9 +12,11 @@ Phase 1 safe foundation is implemented and verified against the production workb
 - The read-only data-quality scanner emits privacy-safe JSON and Markdown reports.
 - Only the eight confirmed formula gaps were repaired: `H1653`, `I1653`, `AB1654:AC1656`.
 - Post-repair current-inventory, weekly, and monthly reconciliation passed with no KPI changes.
+- Business dates and operation-scoped optimistic concurrency have been hardened for future writes.
+- A thin Next.js Web App now provides the navigation shell, live read-only Dashboard, and Work Order / Prepared preview. The preview performs zero writes.
 - No operational business writer has been activated.
 
-Warehouse-layout deployment, Today Task views, dashboard work, and AI actions remain explicitly deferred to the next iteration.
+Return, Move, Adjustment, Label, warehouse-layout deployment, Today Task views, and AI write actions remain explicitly deferred.
 
 ## Repository map
 
@@ -27,7 +29,8 @@ Warehouse-layout deployment, Today Task views, dashboard work, and AI actions re
 - [`reports/data-quality-latest.md`](reports/data-quality-latest.md): privacy-safe scan counts and safe row numbers.
 - [`reports/phase1-reconciliation.md`](reports/phase1-reconciliation.md): aggregate/KPI release-gate result.
 - [`reports/typed-date-e2e.md`](reports/typed-date-e2e.md): isolated Feishu typed-date write/read verification.
-- [`docs/WEB_APP_ARCHITECTURE.md`](docs/WEB_APP_ARCHITECTURE.md): minimal Next.js/application-service boundaries, write lifecycle, concurrency design, routes, and release gates; no UI implementation.
+- [`docs/WEB_APP_ARCHITECTURE.md`](docs/WEB_APP_ARCHITECTURE.md): minimal Next.js/application-service boundaries, write lifecycle, concurrency design, routes, and release gates.
+- [`docs/WEB_APP_ITERATION_1.md`](docs/WEB_APP_ITERATION_1.md): implemented routes, read services, preview limits, security boundary, and next release gates.
 - Other files under `docs/`: standards, schema, workflows, quality rules, views, and AI-skill refactor plan.
 
 ## Development
