@@ -14,7 +14,7 @@
 | Typecheck | PASS | `npm run typecheck`. |
 | Unit/regression tests | PASS | `npm test`: 139 tests passed. |
 | Production build | PASS | `npm run build`; production route manifest contains no business mutation route. |
-| CI | PENDING PUSH | Credential-free GitHub Actions only. |
+| CI | PASS | Credential-free GitHub Actions run `32434076962` passed for implementation commit `905eace`; no Feishu secrets were supplied. |
 | Production business writes | **0** | No business mutation route or online ledger modification. |
 
 ## Configuration gate
