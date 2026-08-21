@@ -2,13 +2,15 @@ import { authenticateWarehousePage } from '../../../src/auth/pageAuth';
 import { warehouseReadAdapterFromEnv } from '../../../src/feishu/warehouseReadAdapter';
 import { todayInSydney } from '../../../src/ledger/businessDate';
 import type { OperationalTask } from '../../../src/application/todayTasks';
+import { isVisualDemoMode, visualDemoTasks } from '../../../src/demo/visualDemo';
 
 export const dynamic = 'force-dynamic';
 
 export default async function TasksPage() {
   try {
     await authenticateWarehousePage('TASK_READ');
-    const snapshot = await warehouseReadAdapterFromEnv().readTodayTasks(todayInSydney());
+    const today = todayInSydney();
+    const snapshot = isVisualDemoMode() ? visualDemoTasks(today) : await warehouseReadAdapterFromEnv().readTodayTasks(today);
     return <><PageHeader /><div className="section-grid">
       <TaskSection title="今日备货工单 · SH COUNT" tasks={snapshot.todayPrepared} />
       <TaskSection title="待取货（派生）· TASK COUNT" tasks={snapshot.awaitingPickup} />

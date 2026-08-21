@@ -1,5 +1,6 @@
 import type { WarehouseAuthContext, WarehouseRole } from './types.js';
 import { readSessionToken, sessionCookieName } from './session.js';
+import { isVisualDemoMode } from '../demo/visualDemo.js';
 
 export class WarehouseAuthenticationError extends Error {
   readonly code = 'AUTHENTICATION_REQUIRED';
@@ -10,6 +11,13 @@ export function createDevOnlyAuthContext(roles: WarehouseRole[] = ['READ_ONLY'])
   return {
     identitySource: 'DEV_ONLY',
     user: { userId: 'DEV_ONLY_LOCAL_USER', displayName: 'DEV_ONLY', roles: [...roles] },
+  };
+}
+
+export function createVisualDemoAuthContext(): WarehouseAuthContext {
+  return {
+    identitySource: 'VISUAL_DEMO',
+    user: { userId: 'VISUAL_DEMO_USER', displayName: '视觉演示', roles: ['READ_ONLY'] },
   };
 }
 
@@ -43,6 +51,7 @@ export function resolveWarehouseAuthContext(
     assertRuntimeIdentityAllowed(context, runtime);
     return context;
   }
+  if (isVisualDemoMode(env)) return createVisualDemoAuthContext();
   if (runtime !== 'production' && env.WAREHOUSE_DEV_AUTH === 'true') {
     return createDevOnlyAuthContext(['WAREHOUSE_OPERATOR']);
   }

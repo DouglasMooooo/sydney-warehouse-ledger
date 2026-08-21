@@ -29,6 +29,19 @@ test('DEV_ONLY identity is explicit and forbidden in production', () => {
   assert.throws(() => resolveWarehouseAuthContext({ runtime: 'production', env: {} }), /valid Feishu session/);
 });
 
+test('visual demo is production-safe, read-only, and incompatible with live credentials', () => {
+  const env = { WAREHOUSE_VISUAL_DEMO: 'true', READ_ONLY_RELEASE: 'true' };
+  const context = resolveWarehouseAuthContext({ runtime: 'production', env });
+  assert.equal(context.identitySource, 'VISUAL_DEMO');
+  assert.deepEqual(context.user.roles, ['READ_ONLY']);
+  assert.doesNotThrow(() => requireWarehousePermission(context, 'DASHBOARD_READ'));
+  assert.throws(() => requireWarehousePermission(context, 'WORK_ORDER_PREVIEW'), /Permission required/);
+  assert.throws(() => resolveWarehouseAuthContext({
+    runtime: 'production',
+    env: { ...env, FEISHU_APP_SECRET: 'must-not-mix-demo-with-live-config' },
+  }), /valid Feishu session/);
+});
+
 test('role assignment is server configured, unknown users fail closed, and precedence is admin then operator', () => {
   const env = { WAREHOUSE_ADMIN_USERS: 'ou_a', WAREHOUSE_OPERATOR_USERS: 'ou_a,ou_b', WAREHOUSE_READ_ONLY_USERS: 'ou_a,ou_b,ou_c' };
   assert.deepEqual(rolesForFeishuUser('ou_a', env), ['WAREHOUSE_ADMIN']);

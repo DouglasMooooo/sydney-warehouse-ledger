@@ -1,12 +1,13 @@
 import { authenticateWarehousePage } from '../../../src/auth/pageAuth';
 import { warehouseReadAdapterFromEnv } from '../../../src/feishu/warehouseReadAdapter';
+import { isVisualDemoMode, visualDemoLocations } from '../../../src/demo/visualDemo';
 
 export const dynamic = 'force-dynamic';
 
 export default async function WarehouseLayoutPage() {
   try {
     await authenticateWarehousePage('INVENTORY_READ');
-    const snapshot = await warehouseReadAdapterFromEnv().readLocationSummaries();
+    const snapshot = isVisualDemoMode() ? visualDemoLocations() : await warehouseReadAdapterFromEnv().readLocationSummaries();
     const groups = [
       { title: 'R1', locations: snapshot.locations.filter((item) => item.location.startsWith('R1-')) },
       { title: 'R2', locations: snapshot.locations.filter((item) => item.location.startsWith('R2-')) },
@@ -18,4 +19,4 @@ export default async function WarehouseLayoutPage() {
   }
 }
 
-function Header() { return <header className="page-header"><div><p className="eyebrow">PHYSICAL LOCATION</p><h2>仓库布局</h2><p>只使用“当前库存明细查询”，按真实 SKU 展示。</p></div><div className="live-badge">Read only · SKU level</div></header>; }
+function Header() { const demo = isVisualDemoMode(); return <header className="page-header"><div><p className="eyebrow">PHYSICAL LOCATION</p><h2>仓库布局</h2><p>{demo ? '使用脱敏示例库位和料号展示布局效果。' : '只使用“当前库存明细查询”，按真实 SKU 展示。'}</p></div><div className="live-badge">{demo ? 'Visual demo · Sample SKU' : 'Read only · SKU level'}</div></header>; }

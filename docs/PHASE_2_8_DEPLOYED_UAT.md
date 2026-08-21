@@ -12,7 +12,7 @@ No inventory row, formula, date, view, workflow, or other business data was writ
 
 ## Vercel visual preview
 
-`https://sydney-warehouse-ledger-uat.vercel.app` hosts a visual-only deployment for early UI review. The landing page is available, but no Feishu application secret, spreadsheet identifier, role mapping, or session secret has been copied into Vercel. Its health endpoint therefore fails closed with HTTP 503 and all services unavailable. Render remains the configured Feishu UAT host until a separate secret migration and callback change are explicitly approved.
+`https://sydney-warehouse-ledger-uat.vercel.app` hosts a visual-only deployment for early UI review. `WAREHOUSE_VISUAL_DEMO=true` permits anonymous read-only navigation only when `READ_ONLY_RELEASE=true` and every live Feishu credential, spreadsheet identifier, role mapping, and session secret is absent. The screens use clearly marked `DEMO-*` sample values and hide operator-only work-order preview and deep-scan actions. Render remains the configured Feishu UAT host until a separate secret migration and callback change are explicitly approved.
 
 The Vercel project is connected to this GitHub repository. `.vercelignore` excludes local build output, local configuration, dependencies, and the preserved stale Next.js directory from deployment uploads.
 

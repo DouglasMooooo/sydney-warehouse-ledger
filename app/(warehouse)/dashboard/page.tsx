@@ -3,15 +3,17 @@ import type { DashboardSnapshot } from '../../../src/application/contracts';
 import { warehouseReadAdapterFromEnv } from '../../../src/feishu/warehouseReadAdapter';
 import { todayInSydney } from '../../../src/ledger/businessDate';
 import { authenticateWarehousePage } from '../../../src/auth/pageAuth';
+import { isVisualDemoMode, visualDemoDashboard } from '../../../src/demo/visualDemo';
 
 export const dynamic = 'force-dynamic';
 
 export default async function DashboardPage() {
   const today = todayInSydney();
   let snapshot: DashboardSnapshot | undefined;
+  const visualDemo = isVisualDemoMode();
   try {
     await authenticateWarehousePage('DASHBOARD_READ');
-    snapshot = await new LiveDashboardQueryService(warehouseReadAdapterFromEnv()).getSnapshot(today);
+    snapshot = visualDemo ? visualDemoDashboard(today) : await new LiveDashboardQueryService(warehouseReadAdapterFromEnv()).getSnapshot(today);
   } catch (error) {
     console.error('Dashboard source read failed', error);
   }
@@ -19,7 +21,7 @@ export default async function DashboardPage() {
     <>
       <header className="page-header">
         <div><p className="eyebrow">OPERATIONS OVERVIEW</p><h2>Dashboard</h2><p>Sydney business date · {today}</p></div>
-        <div className="live-badge">Read only · Live Feishu source</div>
+        <div className="live-badge">{visualDemo ? 'Visual demo · Sample data' : 'Read only · Live Feishu source'}</div>
       </header>
       {!snapshot ? <div className="notice error"><strong>系统读取失败</strong><br />请检查服务端飞书配置和 CLI 登录状态。页面不会使用缓存库存或静默回退。</div> : <DashboardContent snapshot={snapshot} />}
     </>
