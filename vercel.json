@@ -1,0 +1,17 @@
+{
+  "services": {
+    "sydney-warehouse-ledger-uat": {
+      "root": ".",
+      "framework": "nextjs"
+    }
+  },
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": {
+        "type": "service",
+        "service": "sydney-warehouse-ledger-uat"
+      }
+    }
+  ]
+}

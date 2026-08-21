@@ -1,0 +1,6 @@
+.next-stale-phase26/
+.vercel/
+.env
+.env.*
+node_modules/
+.next/
