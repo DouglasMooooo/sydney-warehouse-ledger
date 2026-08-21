@@ -14,6 +14,21 @@ test('UAT runtime config accepts only complete HTTPS OpenAPI read-only configura
   assert.deepEqual(inspectUatRuntimeConfig(valid), { readOnlyRelease: true, authConfigured: true, openApiConfigured: true, rolesConfigured: true, versionConfigured: true });
 });
 
+test('UAT roles require operator and read-only users but allow an explicitly empty admin list', () => {
+  const noAdmin = { ...valid, WAREHOUSE_ADMIN_USERS: '' };
+  assert.equal(inspectUatRuntimeConfig(noAdmin).rolesConfigured, true);
+  assert.doesNotThrow(() => validateUatRuntimeConfig(noAdmin));
+  assert.equal(inspectUatRuntimeConfig({ ...noAdmin, WAREHOUSE_OPERATOR_USERS: '' }).rolesConfigured, false);
+  assert.equal(inspectUatRuntimeConfig({ ...noAdmin, WAREHOUSE_READ_ONLY_USERS: '' }).rolesConfigured, false);
+  const missingAdminKey = { ...valid };
+  delete (missingAdminKey as Partial<typeof valid>).WAREHOUSE_ADMIN_USERS;
+  assert.throws(() => validateUatRuntimeConfig(missingAdminKey), (error: unknown) => {
+    assert(error instanceof RuntimeConfigError);
+    assert(error.missingOrInvalid.includes('WAREHOUSE_ADMIN_USERS(config-key)'));
+    return true;
+  });
+});
+
 test('runtime config fails closed without read-only flag and never includes secret values', () => {
   const unsafe = { ...valid, READ_ONLY_RELEASE: '', FEISHU_APP_SECRET: 'do-not-leak', WAREHOUSE_SESSION_SECRET: 'short' };
   assert.throws(() => validateUatRuntimeConfig(unsafe), (error: unknown) => {

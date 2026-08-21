@@ -25,7 +25,7 @@ FEISHU_MAIN_SHEET_ID=<server secret manager value>
 FEISHU_CURRENT_INVENTORY_SHEET_ID=<server secret manager value>
 FEISHU_OAUTH_REDIRECT_URI=https://<uat-host>/api/auth/feishu/callback
 WAREHOUSE_SESSION_SECRET=<random 32+ characters>
-WAREHOUSE_ADMIN_USERS=<comma-separated Feishu open_id list>
+WAREHOUSE_ADMIN_USERS=<optional comma-separated Feishu open_id list; key may be empty>
 WAREHOUSE_OPERATOR_USERS=<comma-separated Feishu open_id list>
 WAREHOUSE_READ_ONLY_USERS=<comma-separated Feishu open_id list>
 READ_ONLY_RELEASE=true
@@ -95,7 +95,7 @@ If configuration is incomplete, startup logs only `READ_ONLY_UAT_NOT_READY`; rea
 
 ## UAT role mapping
 
-Use stable, app-specific Feishu `open_id` values only in the host secret configuration. Do not commit them. Precedence remains Admin > Operator > Read Only. Configure at least one READ_ONLY user, one WAREHOUSE_OPERATOR user, and one authenticated but unlisted user for negative testing. An unlisted user must receive no session and see `当前账号未获得仓库系统权限`.
+Use stable, app-specific Feishu `open_id` values only in the host secret configuration. Do not commit them. Precedence remains Admin > Operator > Read Only. The Admin key must exist but may be empty; UAT requires at least one READ_ONLY user and one WAREHOUSE_OPERATOR user. Also use one authenticated but unlisted user for negative testing. An unlisted user must receive no session and see `当前账号未获得仓库系统权限`.
 
 ## Security and embedding decision
 

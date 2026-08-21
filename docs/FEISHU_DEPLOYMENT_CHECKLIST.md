@@ -18,7 +18,7 @@ Project-specific values and paths are in `FEISHU_UAT_CONFIGURATION.md`; that doc
 - [ ] Set `FEISHU_READ_ADAPTER=openapi`.
 - [ ] Set server-only `FEISHU_APP_ID`, `FEISHU_APP_SECRET`, `FEISHU_SPREADSHEET_TOKEN`, `FEISHU_MAIN_SHEET_ID`, and `FEISHU_CURRENT_INVENTORY_SHEET_ID`.
 - [ ] Set server-only `WAREHOUSE_SESSION_SECRET` to a random value of at least 32 characters and store it in the host secret manager.
-- [ ] Set `WAREHOUSE_ADMIN_USERS`, `WAREHOUSE_OPERATOR_USERS`, and `WAREHOUSE_READ_ONLY_USERS` using stable Feishu `open_id` values. Confirm precedence and remove departed users.
+- [ ] Set `WAREHOUSE_OPERATOR_USERS` and `WAREHOUSE_READ_ONLY_USERS` to at least one stable Feishu `open_id` each. Define `WAREHOUSE_ADMIN_USERS`, but leave its value empty when no UAT administrator is required. Confirm precedence and remove departed users.
 - [ ] Set `READ_ONLY_RELEASE=true`, `WAREHOUSE_DEV_AUTH=false`, `NODE_ENV=production`, and an immutable `APP_VERSION`.
 - [ ] Do not create any credential named `NEXT_PUBLIC_*`.
 - [ ] Ensure logs and error monitoring apply the repository's privacy boundary.
