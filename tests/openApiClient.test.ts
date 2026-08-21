@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { FeishuOpenApiClient, FeishuOpenApiError, tokenRefreshAt } from '../src/feishu/openApiClient.js';
-import { FeishuOpenApiWarehouseSheetReader } from '../src/feishu/sheetReader.js';
+import { FeishuOpenApiWarehouseSheetReader, GoogleSheetsGvizWarehouseSheetReader } from '../src/feishu/sheetReader.js';
 
 test('tenant token is server-cached, refreshed before expiry, and never appears in errors', async () => {
   let tokenCalls = 0, readCalls = 0, now = 1_000_000;
@@ -42,6 +42,23 @@ test('OpenAPI sheet reader preserves numeric values and produces the same typed 
   assert.deepEqual(table.data, [['00123', 2, 'R1']]);
   assert.equal(table.dtypes['Available Qty'], 'number');
   assert.equal(table.dtypes.SKU, 'string');
+});
+
+test('Google Sheets GViz reader preserves numbers, leading-zero identifiers, quoted text, and bounded ranges', async () => {
+  let requested = '';
+  const fetchMock: typeof fetch = async (input) => {
+    requested = String(input);
+    return new Response('"SKU","Available Qty","Location","Remark"\n"00123","2","R1","line 1\nline 2"\n"","","",""');
+  };
+  const reader = new GoogleSheetsGvizWarehouseSheetReader('public-sheet', fetchMock);
+  const table = await reader.readTable({ sheetName: '当前库存明细查询', range: 'A1:D3' });
+  assert.deepEqual(table.columns, ['SKU', 'Available Qty', 'Location', 'Remark']);
+  assert.deepEqual(table.data, [['00123', 2, 'R1', 'line 1\nline 2']]);
+  assert.equal(table.dtypes['Available Qty'], 'number');
+  assert.equal(table.dtypes.SKU, 'string');
+  const url = new URL(requested);
+  assert.equal(url.searchParams.get('sheet'), '当前库存明细查询');
+  assert.equal(url.searchParams.get('range'), 'A1:D3');
 });
 
 test('token refresh boundary is strictly before expiry for long and short TTLs', () => {

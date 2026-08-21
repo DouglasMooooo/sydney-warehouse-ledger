@@ -26,13 +26,14 @@ test('login, unauthorized, and logout UX are explicit and privacy-safe', () => {
   assert(logout.includes("Cache-Control', 'no-store"));
 });
 
-test('READ_ONLY_UAT registers only the two explicitly allowed warehouse POST routes', () => {
+test('READ_ONLY_UAT registers only approved preview, scan, and isolated UAT smoke-write POST routes', () => {
   assert.doesNotThrow(() => assertReadOnlyRelease({ READ_ONLY_RELEASE: 'true' }));
   assert.throws(() => assertReadOnlyRelease({}), /READ_ONLY_RELEASE=true/);
   const routeFiles = allFiles('app/api/warehouse').filter((path) => path.endsWith('/route.ts'));
   const postRoutes = routeFiles.filter((path) => /export\s+async\s+function\s+POST\s*\(/.test(readFileSync(path, 'utf8')));
   assert.deepEqual(postRoutes.sort(), [
     'app/api/warehouse/exceptions/deep-scan/route.ts',
+    'app/api/warehouse/uat/write-test/route.ts',
     'app/api/warehouse/work-orders/preview/route.ts',
   ]);
   for (const forbidden of ['confirm', 'adjustment', 'reservation', 'finalize']) assert(!routeFiles.some((path) => path.toLowerCase().includes(forbidden)));
@@ -69,6 +70,17 @@ test('warehouse HTTP routes do not import ledger writers or typed write executor
     for (const forbidden of ['src/feishu/write', 'feishu/write', 'typedWrite', 'appendLedger', 'writeExplicitCells']) {
       assert(!source.includes(forbidden), `${path} must not reference ${forbidden}`);
     }
+  }
+});
+
+test('Google write-test route is isolated from the ledger writer and hard-codes the UAT tab', () => {
+  const route = readFileSync('app/api/warehouse/uat/write-test/route.ts', 'utf8');
+  const client = readFileSync('src/googleSheets/writeTest.ts', 'utf8');
+  assert(route.includes("'GOOGLE_UAT_WRITE_TEST'"));
+  assert(client.includes("GOOGLE_UAT_WRITE_TEST_SHEET = 'UAT_写入测试'"));
+  for (const forbidden of ['主表 库存流水', 'writeExplicitCells', 'appendLedger']) {
+    assert(!route.includes(forbidden));
+    assert(!client.includes(forbidden));
   }
 });
 

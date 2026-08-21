@@ -8,6 +8,7 @@ const SENSITIVE_KEYS = [
   'FEISHU_APP_ID', 'FEISHU_APP_SECRET', 'FEISHU_SPREADSHEET_TOKEN',
   'FEISHU_MAIN_SHEET_ID', 'FEISHU_CURRENT_INVENTORY_SHEET_ID',
   'WAREHOUSE_SESSION_SECRET', 'WAREHOUSE_OPERATOR_USERS', 'WAREHOUSE_READ_ONLY_USERS',
+  'GOOGLE_SPREADSHEET_ID',
 ] as const;
 
 /** Public visual preview: sample data only, never combined with live credentials. */
@@ -15,6 +16,19 @@ export function isVisualDemoMode(env: Readonly<Record<string, string | undefined
   return env.WAREHOUSE_VISUAL_DEMO === 'true'
     && env.READ_ONLY_RELEASE === 'true'
     && SENSITIVE_KEYS.every((key) => !env[key]?.trim());
+}
+
+/** Anonymous, zero-write UAT over one explicitly configured public Google Sheet. */
+export function isGoogleSheetsUatMode(env: Readonly<Record<string, string | undefined>> = process.env): boolean {
+  return env.WAREHOUSE_GOOGLE_UAT === 'true'
+    && env.READ_ONLY_RELEASE === 'true'
+    && env.WAREHOUSE_READ_ADAPTER === 'google-sheets-gviz'
+    && Boolean(env.GOOGLE_SPREADSHEET_ID?.trim())
+    && Boolean(env.APP_VERSION?.trim())
+    && [
+      'FEISHU_APP_ID', 'FEISHU_APP_SECRET', 'FEISHU_SPREADSHEET_TOKEN',
+      'WAREHOUSE_SESSION_SECRET', 'WAREHOUSE_OPERATOR_USERS', 'WAREHOUSE_READ_ONLY_USERS',
+    ].every((key) => !env[key]?.trim());
 }
 
 export function visualDemoDashboard(asOf: BusinessDate): DashboardSnapshot {

@@ -4,6 +4,7 @@ import type { WarehouseAuthContext } from './types.js';
 export const WAREHOUSE_PERMISSIONS = [
   'DASHBOARD_READ', 'INVENTORY_READ', 'TASK_READ',
   'WORK_ORDER_PREVIEW', 'WORK_ORDER_CONFIRM',
+  'GOOGLE_UAT_WRITE_TEST',
   'RETURN_PREVIEW', 'RETURN_CONFIRM',
   'MOVE_PREVIEW', 'MOVE_CONFIRM', 'LABEL_GENERATE',
   'ADJUSTMENT_MANAGE', 'EXCEPTION_RESOLVE', 'CONFIGURATION_MANAGE',
@@ -15,6 +16,7 @@ const readOnly: readonly WarehousePermission[] = ['DASHBOARD_READ', 'INVENTORY_R
 const operator: readonly WarehousePermission[] = [
   ...readOnly,
   'WORK_ORDER_PREVIEW', 'WORK_ORDER_CONFIRM',
+  'GOOGLE_UAT_WRITE_TEST',
   'RETURN_PREVIEW', 'RETURN_CONFIRM',
   'MOVE_PREVIEW', 'MOVE_CONFIRM', 'LABEL_GENERATE',
 ];

@@ -67,16 +67,84 @@ export class FeishuOpenApiWarehouseSheetReader implements WarehouseSheetReader {
   }
 }
 
+export class GoogleSheetsGvizWarehouseSheetReader implements WarehouseSheetReader {
+  constructor(
+    private readonly spreadsheetId: string,
+    private readonly fetchImpl: typeof fetch = fetch,
+  ) {}
+
+  async readTable(input: Omit<ReadTypedTableInput, 'spreadsheetUrl'>): Promise<TypedSheetData> {
+    const sheet = input.sheetName?.trim() || input.sheetId?.trim();
+    if (!sheet) throw new Error('SYSTEM_READ_FAILED: Google Sheet tab is required');
+    const url = new URL(`https://docs.google.com/spreadsheets/d/${encodeURIComponent(this.spreadsheetId)}/gviz/tq`);
+    url.searchParams.set('tqx', 'out:csv');
+    url.searchParams.set('sheet', sheet);
+    if (input.range?.trim()) url.searchParams.set('range', input.range.trim());
+    const response = await this.fetchImpl(url, { headers: { Accept: 'text/csv' }, cache: 'no-store' });
+    if (!response.ok) throw new Error(`SYSTEM_READ_FAILED: Google Sheets returned HTTP ${response.status}`);
+    const rows = trimRows(parseCsv(await response.text()).map((row) => row.map(googleCsvScalar)));
+    const width = Math.max(0, ...rows.map((row) => row.length));
+    const normalized = rows.map((row) => Array.from({ length: width }, (_, index) => scalar(row[index])));
+    if (input.noHeader) {
+      return { name: sheet, range: input.range ?? 'used-range', columns: Array.from({ length: width }, (_, index) => columnName(index + 1)), data: normalized, dtypes: inferDtypes(normalized, width) };
+    }
+    const header = normalized[0] ?? [];
+    const body = normalized.slice(1);
+    const columns = Array.from({ length: width }, (_, index) => String(header[index] ?? columnName(index + 1)));
+    return { name: sheet, range: input.range ?? 'used-range', columns, data: body, dtypes: inferDtypes(body, width, columns) };
+  }
+
+  async healthCheck(): Promise<boolean> {
+    try { await this.readTable({ sheetName: '库位维护', range: 'A1:A2' }); return true; } catch { return false; }
+  }
+}
+
 export function warehouseSheetReaderFromEnv(env: Readonly<Record<string, string | undefined>> = process.env): WarehouseSheetReader {
   const url = env.FEISHU_SPREADSHEET_URL?.trim();
   const token = env.FEISHU_SPREADSHEET_TOKEN?.trim() ?? (url ? /\/sheets\/([^/?#]+)/.exec(url)?.[1] : undefined);
-  const mode = env.FEISHU_READ_ADAPTER?.trim() || (env.NODE_ENV === 'production' ? 'openapi' : 'lark-cli');
+  const mode = env.WAREHOUSE_READ_ADAPTER?.trim() || env.FEISHU_READ_ADAPTER?.trim() || (env.NODE_ENV === 'production' ? 'openapi' : 'lark-cli');
+  if (mode === 'google-sheets-gviz') {
+    const spreadsheetId = env.GOOGLE_SPREADSHEET_ID?.trim();
+    if (!spreadsheetId) throw new Error('GOOGLE_SPREADSHEET_ID is required for Google Sheets reads.');
+    return new GoogleSheetsGvizWarehouseSheetReader(spreadsheetId);
+  }
   if (mode === 'openapi') {
     if (!token) throw new Error('FEISHU_SPREADSHEET_TOKEN is required for OpenAPI reads.');
     return new FeishuOpenApiWarehouseSheetReader(token, openApiClientFromEnv(env));
   }
   if (!url) throw new Error('FEISHU_SPREADSHEET_URL is required for lark-cli reads.');
   return new LarkCliWarehouseSheetReader(url);
+}
+
+function parseCsv(value: string): string[][] {
+  const rows: string[][] = [];
+  let row: string[] = [], field = '', quoted = false;
+  for (let index = 0; index < value.length; index += 1) {
+    const char = value[index]!;
+    if (quoted) {
+      if (char === '"' && value[index + 1] === '"') { field += '"'; index += 1; }
+      else if (char === '"') quoted = false;
+      else field += char;
+      continue;
+    }
+    if (char === '"') quoted = true;
+    else if (char === ',') { row.push(field); field = ''; }
+    else if (char === '\n') { row.push(field); rows.push(row); row = []; field = ''; }
+    else if (char !== '\r') field += char;
+  }
+  if (field || row.length) { row.push(field); rows.push(row); }
+  return rows;
+}
+
+function googleCsvScalar(value: string): string | number | boolean | null {
+  if (value === '') return null;
+  if (value === 'TRUE') return true;
+  if (value === 'FALSE') return false;
+  if (/^-?(?:0|[1-9]\d*)(?:\.\d+)?$/.test(value)) {
+    const numeric = Number(value);
+    if (Number.isFinite(numeric)) return numeric;
+  }
+  return value;
 }
 
 function columnName(index: number): string {

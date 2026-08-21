@@ -42,6 +42,19 @@ test('visual demo is production-safe, read-only, and incompatible with live cred
   }), /valid Feishu session/);
 });
 
+test('Google Sheets UAT grants anonymous preview only with explicit zero-write configuration', () => {
+  const env = {
+    WAREHOUSE_GOOGLE_UAT: 'true', READ_ONLY_RELEASE: 'true',
+    WAREHOUSE_READ_ADAPTER: 'google-sheets-gviz', GOOGLE_SPREADSHEET_ID: 'public-sheet', APP_VERSION: 'uat',
+  };
+  const context = resolveWarehouseAuthContext({ runtime: 'production', env });
+  assert.equal(context.identitySource, 'GOOGLE_SHEETS_UAT');
+  assert.deepEqual(context.user.roles, ['WAREHOUSE_OPERATOR']);
+  assert.doesNotThrow(() => requireWarehousePermission(context, 'WORK_ORDER_PREVIEW'));
+  assert.throws(() => requireWarehousePermission(context, 'ADJUSTMENT_MANAGE'), /Permission required/);
+  assert.throws(() => resolveWarehouseAuthContext({ runtime: 'production', env: { ...env, FEISHU_APP_SECRET: 'live' } }), /valid Feishu session/);
+});
+
 test('role assignment is server configured, unknown users fail closed, and precedence is admin then operator', () => {
   const env = { WAREHOUSE_ADMIN_USERS: 'ou_a', WAREHOUSE_OPERATOR_USERS: 'ou_a,ou_b', WAREHOUSE_READ_ONLY_USERS: 'ou_a,ou_b,ou_c' };
   assert.deepEqual(rolesForFeishuUser('ou_a', env), ['WAREHOUSE_ADMIN']);

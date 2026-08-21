@@ -25,3 +25,13 @@ test('readiness does not attempt ledger access when read-only config is unsafe',
   assert.equal(result.ok, false);
   assert.equal(result.services.openApiConfig, 'unavailable');
 });
+
+test('Google Sheets zero-write UAT is ready without Feishu credentials when the public source is readable', async () => {
+  const googleEnv = {
+    WAREHOUSE_GOOGLE_UAT: 'true', READ_ONLY_RELEASE: 'true', WAREHOUSE_READ_ADAPTER: 'google-sheets-gviz',
+    GOOGLE_SPREADSHEET_ID: 'public-sheet', APP_VERSION: 'google-uat',
+  };
+  const ready = await getReadinessSnapshot(googleEnv, async () => true);
+  assert.equal(ready.ok, true);
+  assert.deepEqual(ready.services, { authConfig: 'ok', openApiConfig: 'ok', ledgerRead: 'ok' });
+});

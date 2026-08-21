@@ -1,7 +1,7 @@
 import { authenticateWarehousePage } from '../../../src/auth/pageAuth';
 import { warehouseReadAdapterFromEnv } from '../../../src/feishu/warehouseReadAdapter';
 import { DeepQualityScanClient } from './deep-scan-client';
-import { isVisualDemoMode, visualDemoExceptions } from '../../../src/demo/visualDemo';
+import { isGoogleSheetsUatMode, isVisualDemoMode, visualDemoExceptions } from '../../../src/demo/visualDemo';
 
 export const dynamic = 'force-dynamic';
 
@@ -10,7 +10,7 @@ export default async function ExceptionsPage() {
     await authenticateWarehousePage('TASK_READ');
     const visualDemo = isVisualDemoMode();
     const snapshot = visualDemo ? visualDemoExceptions() : await warehouseReadAdapterFromEnv().readOperationalExceptions();
-    return <><Header /><section className="card section-card"><h3>{visualDemo ? '演示异常' : '实时异常'}</h3><ExceptionTable items={snapshot.exceptions} empty="当前实时规则未发现异常" /><p className="notes">本区实际执行：{snapshot.supportedCodes.join(' · ')}</p></section>{!visualDemo && <DeepQualityScanClient />}</>;
+    return <><Header /><section className="card section-card"><h3>{visualDemo ? '演示异常' : '实时异常'}</h3><ExceptionTable items={snapshot.exceptions} empty="当前实时规则未发现异常" /><p className="notes">本区实际执行：{snapshot.supportedCodes.join(' · ')}</p></section>{!visualDemo && !isGoogleSheetsUatMode() && <DeepQualityScanClient />}</>;
   } catch {
     return <><Header /><div className="notice error">身份、权限或异常来源读取失败。</div></>;
   }

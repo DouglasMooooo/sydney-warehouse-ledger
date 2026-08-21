@@ -7,7 +7,7 @@ export interface WarehouseUser {
   roles: WarehouseRole[];
 }
 
-export type IdentitySource = 'FEISHU' | 'DEV_ONLY' | 'VISUAL_DEMO';
+export type IdentitySource = 'FEISHU' | 'DEV_ONLY' | 'VISUAL_DEMO' | 'GOOGLE_SHEETS_UAT';
 
 export interface WarehouseAuthContext {
   user: WarehouseUser;

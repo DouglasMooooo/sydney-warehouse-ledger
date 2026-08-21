@@ -1,6 +1,6 @@
 import type { WarehouseAuthContext, WarehouseRole } from './types.js';
 import { readSessionToken, sessionCookieName } from './session.js';
-import { isVisualDemoMode } from '../demo/visualDemo.js';
+import { isGoogleSheetsUatMode, isVisualDemoMode } from '../demo/visualDemo.js';
 
 export class WarehouseAuthenticationError extends Error {
   readonly code = 'AUTHENTICATION_REQUIRED';
@@ -18,6 +18,13 @@ export function createVisualDemoAuthContext(): WarehouseAuthContext {
   return {
     identitySource: 'VISUAL_DEMO',
     user: { userId: 'VISUAL_DEMO_USER', displayName: '视觉演示', roles: ['READ_ONLY'] },
+  };
+}
+
+export function createGoogleSheetsUatAuthContext(): WarehouseAuthContext {
+  return {
+    identitySource: 'GOOGLE_SHEETS_UAT',
+    user: { userId: 'GOOGLE_SHEETS_UAT_USER', displayName: 'Google Sheet UAT', roles: ['WAREHOUSE_OPERATOR'] },
   };
 }
 
@@ -51,6 +58,7 @@ export function resolveWarehouseAuthContext(
     assertRuntimeIdentityAllowed(context, runtime);
     return context;
   }
+  if (isGoogleSheetsUatMode(env)) return createGoogleSheetsUatAuthContext();
   if (isVisualDemoMode(env)) return createVisualDemoAuthContext();
   if (runtime !== 'production' && env.WAREHOUSE_DEV_AUTH === 'true') {
     return createDevOnlyAuthContext(['WAREHOUSE_OPERATOR']);

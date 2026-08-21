@@ -208,6 +208,13 @@ export class FeishuWarehouseReadAdapter implements WarehouseReadPort {
 }
 
 export function warehouseReadAdapterFromEnv(): FeishuWarehouseReadAdapter {
+  if (process.env.WAREHOUSE_READ_ADAPTER === 'google-sheets-gviz') {
+    return new FeishuWarehouseReadAdapter({
+      spreadsheetUrl: '',
+      mainSheetId: '主表 库存流水',
+      currentInventorySheetId: '当前库存明细查询',
+    }, warehouseSheetReaderFromEnv());
+  }
   const config = {
     spreadsheetUrl: process.env.FEISHU_SPREADSHEET_URL?.trim() ?? '',
     mainSheetId: requiredEnv('FEISHU_MAIN_SHEET_ID'),
