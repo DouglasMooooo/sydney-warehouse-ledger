@@ -2,30 +2,30 @@
 
 ## Actual state
 
-The target architecture remains a Feishu internal H5/web application opening one HTTPS Node/Next.js service, which reads the existing Feishu ledger through server-side OpenAPI. There is no second inventory database and no business write path.
+The dedicated `Sydney Warehouse UAT` Feishu internal web application and the Render Free web service now exist. Render is serving the exact release commit from `phase1-safe-implementation` at `https://sydney-warehouse-ledger-uat.onrender.com`. The Feishu desktop/mobile entry and OAuth callback point to that host.
 
-The CLI performed a real trusted-user workbook structure read, proving the current user can access the target workbook. A separate bot/application-identity read failed at the metadata scope layer, before document access. The connected CLI application is a broad general-purpose integration application with spreadsheet write-capable user scopes, so it is rejected as the dedicated UAT application.
+The UAT application has only spreadsheet read and spreadsheet readonly scopes. It has no spreadsheet write scope, no external bot sharing, and no business write route. Its version `1.0.0` is limited to the intended Operator and Read Only testers and is currently awaiting enterprise-administrator review.
 
-No real HTTPS host or dedicated internal UAT application has yet been created. Both the Feishu developer console and Render dashboard require an authenticated browser session that was not present in the execution environment.
+The rotated application credential successfully obtains a tenant token. Hosted configuration checks pass for authentication and OpenAPI settings, but ledger read is deliberately unavailable: the application version is not yet online and the spreadsheet has not accepted the application as a `view` collaborator. The health endpoint therefore returns a safe HTTP 503 instead of stale or fabricated data.
+
+No inventory row, formula, date, view, workflow, or other business data was written.
 
 ## Required external continuation
 
-1. Sign in to the Feishu developer console and Render dashboard in the controlled browser session.
-2. In Feishu, locate an existing dedicated Sydney Warehouse UAT internal application or create exactly one. Do not reuse the broad CLI integration application.
-3. In Render, create the single-instance Blueprint from `render.yaml` and the exact release commit.
-4. Store server-only environment values in Render. The Admin role key may be empty; Operator and Read Only must each contain at least one UAT identity.
-5. Enable only the minimum application-identity read scopes demonstrated by the metadata and range endpoints. Grant no spreadsheet, document, or drive write permission.
-6. Add the dedicated application as a read-only document app/collaborator on the target spreadsheet.
-7. Register the exact Render HTTPS entry and callback, publish only to intended UAT testers, then run the configuration checker.
-8. Continue to health, OAuth, role, parity, UI, XLSX, rate-limit, H5, and security UAT only after the checker fully passes.
+1. A `麦田能源` enterprise administrator approves Feishu application version `1.0.0`.
+2. Retry adding the dedicated application to the target spreadsheet using collaborator type `appid` and permission `view`. Do not grant `edit` or `full_access`.
+3. Confirm the dedicated application can query spreadsheet metadata and read a minimal range. Retain only status/type evidence; do not retain business cell contents.
+4. Require `/api/health` to return ready before starting OAuth and role tests.
+5. Run no-session, unlisted-user denial, READ_ONLY, OPERATOR, logout, parity, H5 desktop/mobile, security, rate-limit, and private-XLSX UAT.
+6. Keep the final Phase 2.8 verdict blocked unless every required gate has evidence.
 
 ## Rollback
 
-- Retain the prior Render deployment and keep one UAT instance.
 - Disable or remove the UAT app version from tester availability.
-- Revoke the dedicated application's target-spreadsheet access.
-- Remove all UAT role entries and rotate server-side session/app secrets if exposure is suspected.
-- Suspend/delete the UAT Render service only after retaining required diagnostic evidence; no ledger rollback is needed because business writes remain zero.
+- Revoke the dedicated application's target-spreadsheet `view` access after it is created.
+- Remove UAT role entries and rotate server-side session/application secrets if exposure is suspected.
+- Roll Render back to the preceding successful deploy or suspend the UAT service.
+- No ledger rollback is needed because business writes remain zero.
 
 ## Safety boundary
 
