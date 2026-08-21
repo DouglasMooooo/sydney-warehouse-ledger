@@ -46,6 +46,32 @@ test('production security headers are configured without granting browser OpenAP
   assert(config.includes("connect-src 'self'"));
 });
 
+test('Render UAT hosting is a single Node Docker service with server-only configuration', () => {
+  const dockerfile = readFileSync('Dockerfile', 'utf8');
+  const render = readFileSync('render.yaml', 'utf8');
+  assert(dockerfile.includes('FROM node:22-bookworm-slim'));
+  assert(dockerfile.includes('RUN npm run build'));
+  assert(dockerfile.includes('CMD ["npm", "run", "start"'));
+  assert(render.includes('runtime: docker'));
+  assert(render.includes('healthCheckPath: /api/health'));
+  assert(render.includes('key: READ_ONLY_RELEASE\n        value: "true"'));
+  assert(render.includes('key: WAREHOUSE_DEV_AUTH\n        value: "false"'));
+  assert(!render.includes('NEXT_PUBLIC_'));
+  for (const secret of ['FEISHU_APP_SECRET', 'FEISHU_SPREADSHEET_TOKEN', 'FEISHU_APP_ID']) {
+    const block = render.slice(render.indexOf(`key: ${secret}`), render.indexOf(`key: ${secret}`) + 90);
+    assert(block.includes('sync: false'), `${secret} must be supplied by the host secret manager`);
+  }
+});
+
+test('warehouse HTTP routes do not import ledger writers or typed write executors', () => {
+  for (const path of allFiles('app/api/warehouse').filter((value) => value.endsWith('/route.ts'))) {
+    const source = readFileSync(path, 'utf8');
+    for (const forbidden of ['src/feishu/write', 'feishu/write', 'typedWrite', 'appendLedger', 'writeExplicitCells']) {
+      assert(!source.includes(forbidden), `${path} must not reference ${forbidden}`);
+    }
+  }
+});
+
 function allFiles(directory: string): string[] {
   return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
     const path = `${directory}/${entry.name}`;

@@ -1,6 +1,6 @@
 # Feishu Internal H5 Read-Only Deployment Checklist
 
-Project-specific values and paths are in `FEISHU_UAT_CONFIGURATION.md`; that document is authoritative for Phase 2.6.
+Project-specific values and paths are in `FEISHU_UAT_CONFIGURATION.md`; that document is authoritative for Phase 2.7.
 
 ## Feishu console
 
@@ -14,7 +14,7 @@ Project-specific values and paths are in `FEISHU_UAT_CONFIGURATION.md`; that doc
 
 ## Host and environment
 
-- [ ] Use a supported production Node runtime with HTTPS; do not deploy the OpenAPI reader to an Edge runtime.
+- [ ] Create the Render Blueprint from `render.yaml` on branch `phase1-safe-implementation`; use the included Node 22 Docker runtime, stable HTTPS URL, and one UAT instance.
 - [ ] Set `FEISHU_READ_ADAPTER=openapi`.
 - [ ] Set server-only `FEISHU_APP_ID`, `FEISHU_APP_SECRET`, `FEISHU_SPREADSHEET_TOKEN`, `FEISHU_MAIN_SHEET_ID`, and `FEISHU_CURRENT_INVENTORY_SHEET_ID`.
 - [ ] Set server-only `WAREHOUSE_SESSION_SECRET` to a random value of at least 32 characters and store it in the host secret manager.
@@ -22,6 +22,8 @@ Project-specific values and paths are in `FEISHU_UAT_CONFIGURATION.md`; that doc
 - [ ] Set `READ_ONLY_RELEASE=true`, `WAREHOUSE_DEV_AUTH=false`, `NODE_ENV=production`, and an immutable `APP_VERSION`.
 - [ ] Do not create any credential named `NEXT_PUBLIC_*`.
 - [ ] Ensure logs and error monitoring apply the repository's privacy boundary.
+- [ ] Run `npm run uat:feishu-config-check` from a trusted host shell. Resolve scope and document-access failures separately; never paste secrets or full API bodies into an issue/report.
+- [ ] Confirm an incomplete configuration produces degraded `/api/health` readiness and cannot expose warehouse screens; it should not require a crash loop.
 
 ## Web security
 
@@ -33,6 +35,7 @@ Project-specific values and paths are in `FEISHU_UAT_CONFIGURATION.md`; that doc
 
 ## Read-only UAT
 
+- [ ] Record a safe five-step configuration-check result: credentials, tenant token, metadata scope, document access, and tiny range read.
 - [ ] Verify no session is 401 and an unlisted authenticated user is 403.
 - [ ] Verify READ_ONLY can use Dashboard/Tasks/Layout/Exceptions but cannot use Work Order Preview.
 - [ ] Verify WAREHOUSE_OPERATOR can run preview and receives no raw token, sheet ID, formula, or workbook dump.
@@ -48,4 +51,4 @@ Project-specific values and paths are in `FEISHU_UAT_CONFIGURATION.md`; that doc
 - [ ] Run `npm ci`, `npm run typecheck`, `npm test`, and `npm run build` from the exact release commit.
 - [ ] Record the Git commit and successful CI run in the release gate.
 - [ ] Retain an immediate rollback deployment and a way to remove the app version from UAT users.
-- [ ] Do not add a confirm/write route under Phase 2.6. Phase 3 needs a separate review and approval.
+- [ ] Do not add a confirm/write route under Phase 2.7. Phase 3 needs a separate review and approval.

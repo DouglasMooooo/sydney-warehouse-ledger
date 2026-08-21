@@ -15,7 +15,8 @@
     "reconcile": "tsx src/scripts/reconcile.ts",
     "test:feishu-date": "tsx src/scripts/verifyDateWrite.ts",
     "test:work-orders-private": "tsx src/scripts/testPrivateWorkOrders.ts",
-    "uat:openapi-parity": "tsx src/scripts/validateOpenApiParity.ts"
+    "uat:openapi-parity": "tsx src/scripts/validateOpenApiParity.ts",
+    "uat:feishu-config-check": "tsx src/scripts/checkFeishuUatConfig.ts"
   },
   "devDependencies": {
     "@types/node": "^24.3.0",

@@ -1,0 +1,11 @@
+.git
+.github
+.next
+node_modules
+.env*
+tests/fixtures/work-orders/private
+reports/private
+*.xlsx
+*.xls
+*.csv
+*.tsv

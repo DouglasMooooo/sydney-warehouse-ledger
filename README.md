@@ -6,7 +6,7 @@ The project deliberately keeps the current ledger as the system of record. It do
 
 ## Current stage
 
-Phase 2.6 read-only Feishu UAT code preparation is implemented; HTTPS deployment, Feishu console configuration, and live-user UAT remain pending.
+Phase 2.7 real Feishu configuration tooling and read-only UAT host preparation are implemented; HTTPS deployment, Feishu console configuration, and live-user UAT remain pending.
 
 - Strict TypeScript normalisation, controlled-value validation, protected-column guards, and typed write preparation are available for future workflows.
 - The read-only data-quality scanner emits privacy-safe JSON and Markdown reports.
@@ -26,6 +26,8 @@ Phase 2.6 read-only Feishu UAT code preparation is implemented; HTTPS deployment
 - Production startup/readiness now fails closed unless the complete `READ_ONLY_UAT` OpenAPI/HTTPS/auth/role configuration is present; `/api/health` separately proves config and target-spreadsheet readability.
 - Deep OpenAPI coverage is explicit about transport limits: date/formula checks are PARTIAL until live evidence, and unavailable validation metadata is not advertised as authoritative.
 - The UAT parity runner compares privacy-safe business aggregates across trusted CLI and hosted OpenAPI reads; no real-ledger parity is claimed without execution evidence.
+- A privacy-safe Feishu configuration checker distinguishes token, scope, document access, spreadsheet, and range-read failures without disclosing identifiers or API bodies.
+- A single-instance Render/Node 22 HTTPS deployment definition is prepared. No deployment is claimed because host credentials and designated UAT environment values were unavailable.
 - No operational business writer has been activated.
 
 Return, Move, Adjustment, Label confirmation, all AI/write actions, and every production business write remain explicitly deferred. Feishu console setup, HTTPS hosting, document permissions, and staff UAT are not claimed complete.
@@ -53,6 +55,8 @@ Return, Move, Adjustment, Label confirmation, all AI/write actions, and every pr
 - [`docs/PHASE_2_6_UAT.md`](docs/PHASE_2_6_UAT.md): Phase 2.6 code boundary, truthful deep coverage, parity tooling, and live-UAT blockers.
 - [`docs/FEISHU_UAT_CONFIGURATION.md`](docs/FEISHU_UAT_CONFIGURATION.md): exact project URLs, environment names, minimum read-only scopes, document access, roles, and CSP decision.
 - [`reports/phase2_6-uat-release-gate.md`](reports/phase2_6-uat-release-gate.md): separate CODE, CONFIGURATION, and LIVE UAT evidence.
+- [`docs/PHASE_2_7_LIVE_UAT.md`](docs/PHASE_2_7_LIVE_UAT.md): Phase 2.7 tooling, external configuration sequence, live test matrix, and truthful blockers.
+- [`reports/phase2_7-live-uat-release-gate.md`](reports/phase2_7-live-uat-release-gate.md): separate Phase 2.7 CODE, CONFIGURATION, and LIVE UAT gates.
 - [`reports/phase2-reconciliation.md`](reports/phase2-reconciliation.md): privacy-safe live layout and non-regression release gate.
 - Other files under `docs/`: standards, schema, workflows, quality rules, views, and AI-skill refactor plan.
 

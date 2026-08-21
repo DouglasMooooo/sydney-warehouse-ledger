@@ -54,6 +54,45 @@ API scope alone is insufficient. In the target spreadsheet, use the document men
 
 Current evidence: the locally configured CLI application identity was denied before document-access evaluation because `sheets:spreadsheet:read` was not enabled. This is not the designated deployed UAT application and was not modified. Application scope activation and subsequent document-app access therefore remain PENDING.
 
+## Safe configuration check
+
+After the server-only environment is populated, run this command from a trusted administrator shell or a one-off host shell:
+
+```bash
+npm run uat:feishu-config-check
+```
+
+It validates the runtime configuration, obtains a tenant token, queries worksheet metadata, and reads only `<main-sheet>!A1:A1` with `UnformattedValue`. It never prints credentials, tokens, spreadsheet/sheet identifiers, user identifiers, cell contents, or full API bodies. It performs no spreadsheet write.
+
+The private diagnostic codes deliberately separate configuration layers:
+
+| Code | Meaning / next action |
+| --- | --- |
+| `UAT_RUNTIME_CONFIG_INVALID` | One or more required server variables, HTTPS callback rules, roles, or `READ_ONLY_RELEASE=true` are missing/invalid. Complete the environment first. |
+| `FEISHU_TOKEN_FAILED` | Verify the UAT app ID/secret and app availability without printing either value. |
+| `FEISHU_SCOPE_MISSING` | Enable only the required read-only spreadsheet permission(s), publish the app version, and rerun. |
+| `FEISHU_DOCUMENT_ACCESS_DENIED` | Add the UAT application as a document app/read collaborator on the target spreadsheet, then rerun. |
+| `FEISHU_SPREADSHEET_NOT_FOUND` | Verify the server-only spreadsheet token refers to an existing accessible spreadsheet. |
+| `FEISHU_RANGE_READ_FAILED` | Metadata succeeded but the tiny range could not be read; verify the main sheet ID and range-read permission. |
+
+Public application routes remain sanitized and do not return these private diagnostics or upstream API bodies.
+
+## Selected UAT host: Render
+
+This repository includes `render.yaml` and a Node 22 `Dockerfile` for one Render web service. No Render credentials were available during Phase 2.7 preparation, so no deployment is claimed.
+
+Exact next action:
+
+1. In Render, create a **Blueprint** from this GitHub repository and select branch `phase1-safe-implementation`.
+2. Keep one instance. The current rate limiter is in-memory and is intentionally not multi-replica UAT infrastructure.
+3. Populate every `sync: false` environment value in Render's secret manager. Never put a secret in the repository or a `NEXT_PUBLIC_*` variable.
+4. Use the assigned stable HTTPS hostname to set `FEISHU_OAUTH_REDIRECT_URI=https://<uat-host>/api/auth/feishu/callback`.
+5. Register that exact callback and `https://<uat-host>/` H5 entry in the Feishu console; do not use a wildcard.
+6. Enable the minimum effective read-only scope set, publish the UAT app version, and add the application to the spreadsheet with read access.
+7. Deploy, run `npm run uat:feishu-config-check` in a trusted host shell, then verify `GET https://<uat-host>/api/health` returns `ok=true` before staff UAT.
+
+If configuration is incomplete, startup logs only `READ_ONLY_UAT_NOT_READY`; readiness stays degraded and warehouse pages remain inaccessible. The service does not present a usable false-ready state and need not crash-loop.
+
 ## UAT role mapping
 
 Use stable, app-specific Feishu `open_id` values only in the host secret configuration. Do not commit them. Precedence remains Admin > Operator > Read Only. Configure at least one READ_ONLY user, one WAREHOUSE_OPERATOR user, and one authenticated but unlisted user for negative testing. An unlisted user must receive no session and see `当前账号未获得仓库系统权限`.

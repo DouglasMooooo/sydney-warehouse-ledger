@@ -1,0 +1,35 @@
+services:
+  - type: web
+    name: sydney-warehouse-ledger-uat
+    runtime: docker
+    plan: starter
+    healthCheckPath: /api/health
+    envVars:
+      - key: FEISHU_READ_ADAPTER
+        value: openapi
+      - key: READ_ONLY_RELEASE
+        value: "true"
+      - key: WAREHOUSE_DEV_AUTH
+        value: "false"
+      - key: FEISHU_APP_ID
+        sync: false
+      - key: FEISHU_APP_SECRET
+        sync: false
+      - key: FEISHU_SPREADSHEET_TOKEN
+        sync: false
+      - key: FEISHU_MAIN_SHEET_ID
+        sync: false
+      - key: FEISHU_CURRENT_INVENTORY_SHEET_ID
+        sync: false
+      - key: FEISHU_OAUTH_REDIRECT_URI
+        sync: false
+      - key: WAREHOUSE_SESSION_SECRET
+        generateValue: true
+      - key: WAREHOUSE_ADMIN_USERS
+        sync: false
+      - key: WAREHOUSE_OPERATOR_USERS
+        sync: false
+      - key: WAREHOUSE_READ_ONLY_USERS
+        sync: false
+      - key: APP_VERSION
+        sync: false
