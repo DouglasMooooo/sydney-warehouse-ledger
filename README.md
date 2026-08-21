@@ -6,7 +6,7 @@ The project deliberately keeps the current ledger as the system of record. It do
 
 ## Current stage
 
-Phase 2.7 real Feishu configuration tooling and read-only UAT host preparation are implemented; HTTPS deployment, Feishu console configuration, and live-user UAT remain pending.
+Phase 2.8 CLI-assisted predeployment inspection is in progress. The code/tooling gate is ready, but the connected general-purpose CLI application is not an acceptable dedicated read-only UAT app; HTTPS deployment, dedicated Feishu app configuration, and live-user UAT remain pending.
 
 - Strict TypeScript normalisation, controlled-value validation, protected-column guards, and typed write preparation are available for future workflows.
 - The read-only data-quality scanner emits privacy-safe JSON and Markdown reports.
@@ -57,6 +57,9 @@ Return, Move, Adjustment, Label confirmation, all AI/write actions, and every pr
 - [`reports/phase2_6-uat-release-gate.md`](reports/phase2_6-uat-release-gate.md): separate CODE, CONFIGURATION, and LIVE UAT evidence.
 - [`docs/PHASE_2_7_LIVE_UAT.md`](docs/PHASE_2_7_LIVE_UAT.md): Phase 2.7 tooling, external configuration sequence, live test matrix, and truthful blockers.
 - [`reports/phase2_7-live-uat-release-gate.md`](reports/phase2_7-live-uat-release-gate.md): separate Phase 2.7 CODE, CONFIGURATION, and LIVE UAT gates.
+- [`reports/phase2_8-predeployment-snapshot.md`](reports/phase2_8-predeployment-snapshot.md): privacy-safe CLI/app/scope/host state captured before external configuration changes.
+- [`docs/PHASE_2_8_DEPLOYED_UAT.md`](docs/PHASE_2_8_DEPLOYED_UAT.md): actual Phase 2.8 architecture, current blockers, external sequence, and rollback plan.
+- [`reports/phase2_8-live-deployment-gate.md`](reports/phase2_8-live-deployment-gate.md): truthful deployment, configuration, auth, OpenAPI, parity, UI, XLSX, security, and write gates.
 - [`reports/phase2-reconciliation.md`](reports/phase2-reconciliation.md): privacy-safe live layout and non-regression release gate.
 - Other files under `docs/`: standards, schema, workflows, quality rules, views, and AI-skill refactor plan.
 

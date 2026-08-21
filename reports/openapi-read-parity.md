@@ -6,6 +6,8 @@ No designated UAT OpenAPI credentials or HTTPS deployment were available in the 
 
 Phase 2.7 preparation added a privacy-safe real configuration check, but the current environment reports `UAT_RUNTIME_CONFIG_INVALID` because designated UAT server variables are absent. Consequently no execution timestamp or source comparison can truthfully be recorded yet. Once configuration passes, run the parity command against the same current workbook state and add an execution timestamp plus aggregate PASS/FAIL for every required area; discrete quantities require exact equality.
 
+Phase 2.8 CLI-assisted inspection proved the trusted user adapter can read the live workbook structure, while the connected application identity failed metadata access for missing `sheets:spreadsheet:read`. Because the hosted/OpenAPI side is not ready, no business parity command was run and no aggregate equality is claimed. Downstream parity remains stopped at the configuration gate.
+
 The privacy-safe runner is `npm run uat:openapi-parity`. It compares logical aggregates only for Dashboard, Today Tasks, Warehouse Layout, Current Inventory, Location Master, Exceptions, Pickup Code reads, and—when a private probe SKU is supplied—Product Master and inventory recommendation inputs. It writes the detailed local result under ignored `reports/private/` and never prints identifiers, SKU values, row contents, SNs, customer data, sheet IDs, or tokens.
 
 Work Order XLSX Preview recommendation remains a manual/private UAT check because it requires a private historical XLSX and expected values. Record only aggregate PASS/FAIL evidence after execution.
