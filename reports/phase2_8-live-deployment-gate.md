@@ -52,7 +52,7 @@ Private historical regression and deployed preview: **PENDING**. Existing fixtur
 
 Live HTTPS headers, bundle/network leak check, rate limiting, safe failure behavior, and no-stale-data behavior: **PENDING**. Static code gates remain in place.
 
-Credential-free local gates: TypeScript **PASS**; 140 tests **PASS**; production build **PASS**. Private fixture runner returned `PRIVATE_FIXTURES_NOT_CONFIGURED` with 0 fixtures.
+Credential-free gates: TypeScript **PASS**; 140 tests **PASS**; production build **PASS**; GitHub Actions run `32438009581` **PASS** for evidence commit `32a2fa9`. Private fixture runner returned `PRIVATE_FIXTURES_NOT_CONFIGURED` with 0 fixtures.
 
 ## Write audit
 
