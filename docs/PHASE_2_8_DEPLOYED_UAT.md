@@ -4,9 +4,9 @@
 
 The dedicated `Sydney Warehouse UAT` Feishu internal web application and the Render Free web service now exist. Render is serving the exact release commit from `phase1-safe-implementation` at `https://sydney-warehouse-ledger-uat.onrender.com`. The Feishu desktop/mobile entry and OAuth callback point to that host.
 
-The UAT application has only spreadsheet read and spreadsheet readonly scopes. It has no spreadsheet write scope, no external bot sharing, and no business write route. Its version `1.0.0` is limited to the intended Operator and Read Only testers and is currently awaiting enterprise-administrator review.
+The UAT application has only spreadsheet read and spreadsheet readonly scopes. It has no spreadsheet write scope, no external bot sharing, and no business write route. Its version `1.0.1` is approved and limited to the intended UAT testers.
 
-The rotated application credential successfully obtains a tenant token. Hosted configuration checks pass for authentication and OpenAPI settings, but ledger read is deliberately unavailable: the application version is not yet online and the spreadsheet has not accepted the application as a `view` collaborator. The health endpoint therefore returns a safe HTTP 503 instead of stale or fabricated data.
+The rotated application credential successfully obtains a tenant token, and Render now contains the intended spreadsheet token and sheet IDs. Ledger readiness is nevertheless blocked: on 2026-08-22, both the metadata read and an attempt to re-add the application collaborator established that the target spreadsheet token resolves to a deleted resource (`1063005 Resource is deleted`). The health endpoint therefore correctly returns a safe HTTP 503 instead of stale or fabricated data.
 
 No inventory row, formula, date, view, workflow, or other business data was written.
 
@@ -18,8 +18,8 @@ The Vercel project is connected to this GitHub repository. `.vercelignore` exclu
 
 ## Required external continuation
 
-1. A `麦田能源` enterprise administrator approves Feishu application version `1.0.0`.
-2. Retry adding the dedicated application to the target spreadsheet using collaborator type `appid` and permission `view`. Do not grant `edit` or `full_access`.
+1. Restore the deleted target spreadsheet, or provide a replacement Feishu spreadsheet URL with the required warehouse tabs.
+2. Update the server-only spreadsheet token and sheet IDs if a replacement is used, then add the dedicated application as a document collaborator with the explicitly approved permission.
 3. Confirm the dedicated application can query spreadsheet metadata and read a minimal range. Retain only status/type evidence; do not retain business cell contents.
 4. Require `/api/health` to return ready before starting OAuth and role tests.
 5. Run no-session, unlisted-user denial, READ_ONLY, OPERATOR, logout, parity, H5 desktop/mobile, security, rate-limit, and private-XLSX UAT.
