@@ -18,7 +18,8 @@ test('OAuth responses preserve and clear the state cookie, omit incompatible PKC
   assert(!callback.includes('warehouse_oauth_verifier'));
   assert(!start.includes('code_challenge'));
   assert(callback.includes("stage: error.stage, providerCode: error.providerCode ?? null"));
-  assert(callback.includes("new URL('/dashboard', request.url)"));
+  assert(callback.includes("new URL('/dashboard', oauthConfig.redirectUri)"));
+  assert(!callback.includes("new URL('/dashboard', request.url)"));
   assert(callback.includes('{ status: 403'));
   assert(callback.includes('当前账号未获得仓库系统权限'));
   for (const unsafe of ['returnTo', 'return_to', 'redirect_uri', "searchParams.get('next')"]) assert(!callback.includes(unsafe));

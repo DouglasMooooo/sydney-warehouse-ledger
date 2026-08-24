@@ -16,7 +16,8 @@ export async function GET(request: Request) {
     return finish(NextResponse.json(apiFailure('AUTHENTICATION_REQUIRED', '飞书登录状态无效或已过期。'), { status: 401 }));
   }
   try {
-    const user = await new FeishuOAuthIdentityProvider(feishuOAuthConfigFromEnv()).resolveUser(code);
+    const oauthConfig = feishuOAuthConfigFromEnv();
+    const user = await new FeishuOAuthIdentityProvider(oauthConfig).resolveUser(code);
     // union_id is stable across apps from the same developer; open_id remains
     // supported for existing single-app role assignments.
     const roles = rolesForFeishuIdentities([user.openId, ...(user.unionId ? [user.unionId] : [])]);
@@ -28,7 +29,9 @@ export async function GET(request: Request) {
     const context = { identitySource: 'FEISHU' as const, user: { userId: user.openId, roles, ...(user.displayName ? { displayName: user.displayName } : {}) } };
     const secret = process.env.WAREHOUSE_SESSION_SECRET?.trim();
     if (!secret) throw new Error('WAREHOUSE_SESSION_SECRET_MISSING');
-    const response = NextResponse.redirect(new URL('/dashboard', request.url));
+    // Render terminates TLS in front of the container, so request.url may use
+    // its internal localhost origin. Redirect only to the reviewed OAuth origin.
+    const response = NextResponse.redirect(new URL('/dashboard', oauthConfig.redirectUri));
     response.cookies.set(sessionCookieName(runtime), createSessionToken(context, secret), sessionCookieOptions(runtime));
     return finish(response);
   } catch (error) {
