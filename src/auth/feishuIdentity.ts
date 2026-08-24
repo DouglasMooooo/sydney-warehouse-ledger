@@ -1,5 +1,6 @@
 export interface VerifiedFeishuUser {
   openId: string;
+  unionId?: string;
   displayName?: string;
 }
 
@@ -42,11 +43,12 @@ export class FeishuOAuthIdentityProvider implements FeishuIdentityProvider {
     const userResponse = await this.fetchImpl('https://open.feishu.cn/open-apis/authen/v1/user_info', {
       headers: { authorization: `Bearer ${token.access_token}` },
     });
-    const user = await safeJson(userResponse, 'USER_INFO') as { code?: number; data?: { open_id?: string; name?: string } };
+    const user = await safeJson(userResponse, 'USER_INFO') as { code?: number; data?: { open_id?: string; union_id?: string; name?: string } };
     if (!userResponse.ok || user.code !== 0 || !user.data?.open_id) {
       throw new FeishuIdentityError('Feishu user verification failed.', 'USER_INFO', numericCode(user.code));
     }
     const result: VerifiedFeishuUser = { openId: user.data.open_id };
+    if (user.data.union_id) result.unionId = user.data.union_id;
     if (user.data.name) result.displayName = user.data.name;
     return result;
   }

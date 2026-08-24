@@ -16,10 +16,10 @@ test('Feishu OAuth adapter exchanges code server-side and returns only verified 
       return Response.json({ code: 0, access_token: 'user-token', expires_in: 7200 });
     }
     assert.equal((init?.headers as Record<string, string>).authorization, 'Bearer user-token');
-    return Response.json({ code: 0, data: { open_id: 'ou_verified', name: 'Verified User', mobile: 'must-not-propagate' } });
+    return Response.json({ code: 0, data: { open_id: 'ou_verified', union_id: 'on_stable', name: 'Verified User', mobile: 'must-not-propagate' } });
   };
   const user = await new FeishuOAuthIdentityProvider(config, fakeFetch as typeof fetch).resolveUser('one-time-code');
-  assert.deepEqual(user, { openId: 'ou_verified', displayName: 'Verified User' });
+  assert.deepEqual(user, { openId: 'ou_verified', unionId: 'on_stable', displayName: 'Verified User' });
   assert.equal(calls.length, 2);
 });
 

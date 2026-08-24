@@ -2,7 +2,7 @@ import { timingSafeEqual } from 'node:crypto';
 import { NextResponse } from 'next/server';
 import { apiFailure } from '../../../../../src/application/apiResponse';
 import { FeishuIdentityError, FeishuOAuthIdentityProvider, feishuOAuthConfigFromEnv } from '../../../../../src/auth/feishuIdentity';
-import { rolesForFeishuUser } from '../../../../../src/auth/roleMapping';
+import { rolesForFeishuIdentities } from '../../../../../src/auth/roleMapping';
 import { createSessionToken, sessionCookieName, sessionCookieOptions } from '../../../../../src/auth/session';
 
 export const runtime = 'nodejs';
@@ -17,7 +17,9 @@ export async function GET(request: Request) {
   }
   try {
     const user = await new FeishuOAuthIdentityProvider(feishuOAuthConfigFromEnv()).resolveUser(code);
-    const roles = rolesForFeishuUser(user.openId);
+    // union_id is stable across apps from the same developer; open_id remains
+    // supported for existing single-app role assignments.
+    const roles = rolesForFeishuIdentities([user.openId, ...(user.unionId ? [user.unionId] : [])]);
     if (roles.length === 0) return finish(new NextResponse(
       '<!doctype html><html lang="zh-CN"><meta charset="utf-8"><title>无访问权限</title><body><main><h1>当前账号未获得仓库系统权限</h1><p>请联系仓库系统管理员配置 UAT 角色。</p><a href="/">返回登录页</a></main></body></html>',
       { status: 403, headers: { 'Content-Type': 'text/html; charset=utf-8' } },

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { assertRuntimeIdentityAllowed, createDevOnlyAuthContext, resolveWarehouseAuthContext } from '../src/auth/authContext.js';
 import { hasWarehousePermission, requireWarehousePermission } from '../src/auth/permissions.js';
-import { rolesForFeishuUser } from '../src/auth/roleMapping.js';
+import { rolesForFeishuIdentities, rolesForFeishuUser } from '../src/auth/roleMapping.js';
 import { createSessionToken, readSessionToken } from '../src/auth/session.js';
 
 test('READ_ONLY is limited to dashboard, inventory, and task reads', () => {
@@ -35,6 +35,7 @@ test('role assignment is server configured, unknown users fail closed, and prece
   assert.deepEqual(rolesForFeishuUser('ou_b', env), ['WAREHOUSE_OPERATOR']);
   assert.deepEqual(rolesForFeishuUser('ou_c', env), ['READ_ONLY']);
   assert.deepEqual(rolesForFeishuUser('ou_unknown', env), []);
+  assert.deepEqual(rolesForFeishuIdentities(['ou_other_app', 'ou_a'], env), ['WAREHOUSE_ADMIN']);
 });
 
 test('signed short-lived session rejects tampering/expiry and authorizes an operator preview', () => {
