@@ -6,7 +6,9 @@ The dedicated `Sydney Warehouse UAT` Feishu internal web application and the Ren
 
 The UAT application has only spreadsheet read and spreadsheet readonly scopes. It has no spreadsheet write scope, no external bot sharing, and no business write route. Its version `1.0.1` is approved and limited to the intended UAT testers.
 
-The rotated application credential successfully obtains a tenant token, and Render now contains the intended spreadsheet token and sheet IDs. Ledger readiness is nevertheless blocked: on 2026-08-22, both the metadata read and an attempt to re-add the application collaborator established that the target spreadsheet token resolves to a deleted resource (`1063005 Resource is deleted`). The health endpoint therefore correctly returns a safe HTTP 503 instead of stale or fabricated data.
+The rotated application credential successfully obtains a tenant token. On 2026-08-24, the deleted spreadsheet was replaced with the designated UAT spreadsheet, the dedicated application was granted document-level `view` access, and Render was updated with its server-only token and exact main/current-inventory sheet IDs. The deployed health endpoint now returns HTTP 200 with authentication, OpenAPI configuration, and ledger read all `ok`.
+
+An unauthenticated request to `/dashboard` returns a 307 redirect to the entry page. The entry page exposes only the Feishu login action and the explicit read-only release warning; it does not render warehouse data before authentication.
 
 No inventory row, formula, date, view, workflow, or other business data was written.
 
@@ -18,12 +20,9 @@ The Vercel project is connected to this GitHub repository. `.vercelignore` exclu
 
 ## Required external continuation
 
-1. Restore the deleted target spreadsheet, or provide a replacement Feishu spreadsheet URL with the required warehouse tabs.
-2. Update the server-only spreadsheet token and sheet IDs if a replacement is used, then add the dedicated application as a document collaborator with the explicitly approved permission.
-3. Confirm the dedicated application can query spreadsheet metadata and read a minimal range. Retain only status/type evidence; do not retain business cell contents.
-4. Require `/api/health` to return ready before starting OAuth and role tests.
-5. Run no-session, unlisted-user denial, READ_ONLY, OPERATOR, logout, parity, H5 desktop/mobile, security, rate-limit, and private-XLSX UAT.
-6. Keep the final Phase 2.8 verdict blocked unless every required gate has evidence.
+1. Complete an interactive Feishu OAuth login with each assigned role and verify the signed session boundary.
+2. Run unlisted-user denial, READ_ONLY, OPERATOR, logout, parity, H5 desktop/mobile, security, rate-limit, and private-XLSX UAT.
+3. Keep the final Phase 2.8 verdict blocked unless every required gate has evidence.
 
 ## Rollback
 
