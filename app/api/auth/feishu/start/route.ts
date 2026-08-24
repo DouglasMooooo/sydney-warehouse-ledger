@@ -9,7 +9,8 @@ export async function GET() {
   const state = randomBytes(24).toString('base64url');
   const verifier = randomBytes(48).toString('base64url');
   const response = NextResponse.redirect(createFeishuAuthorizationUrl(feishuOAuthConfigFromEnv(), state, verifier));
-  const options = { httpOnly: true, secure: runtime === 'production', sameSite: 'lax' as const, path: '/', maxAge: 5 * 60 };
+  const secure = runtime === 'production';
+  const options = { httpOnly: true, secure, sameSite: secure ? 'none' as const : 'lax' as const, path: '/', maxAge: 5 * 60 };
   response.cookies.set('warehouse_oauth_state', state, options);
   response.cookies.set('warehouse_oauth_verifier', verifier, options);
   response.headers.set('Cache-Control', 'no-store');

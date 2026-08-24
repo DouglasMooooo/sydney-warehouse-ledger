@@ -3,10 +3,17 @@ import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import test from 'node:test';
 import { assertReadOnlyRelease } from '../src/safety/readOnlyRelease.js';
 
-test('OAuth responses are no-store, temporary cookies are cleared, and callback has no open redirect input', () => {
+test('OAuth responses preserve temporary cookies across the Feishu callback, clear them, and have no open redirect input', () => {
   const start = readFileSync('app/api/auth/feishu/start/route.ts', 'utf8');
   const callback = readFileSync('app/api/auth/feishu/callback/route.ts', 'utf8');
   for (const source of [start, callback]) assert(source.includes("Cache-Control', 'no-store"));
+  for (const source of [start, callback]) {
+    assert(source.includes("sameSite: secure ? 'none' as const : 'lax' as const"));
+    assert(source.includes('httpOnly: true'));
+  }
+  assert(start.includes('const secure = runtime === \'production\''));
+  assert(start.includes("response.cookies.set('warehouse_oauth_state', state, options)"));
+  assert(start.includes("response.cookies.set('warehouse_oauth_verifier', verifier, options)"));
   assert(callback.includes("response.cookies.set('warehouse_oauth_state', '', options)"));
   assert(callback.includes("response.cookies.set('warehouse_oauth_verifier', '', options)"));
   assert(callback.includes("new URL('/dashboard', request.url)"));
@@ -54,8 +61,8 @@ test('Render UAT hosting is a single Node Docker service with server-only config
   assert(dockerfile.includes('CMD ["npm", "run", "start"'));
   assert(render.includes('runtime: docker'));
   assert(render.includes('healthCheckPath: /api/health'));
-  assert(render.includes('key: READ_ONLY_RELEASE\n        value: "true"'));
-  assert(render.includes('key: WAREHOUSE_DEV_AUTH\n        value: "false"'));
+  assert(/key: READ_ONLY_RELEASE\r?\n\s+value: "true"/.test(render));
+  assert(/key: WAREHOUSE_DEV_AUTH\r?\n\s+value: "false"/.test(render));
   assert(!render.includes('NEXT_PUBLIC_'));
   for (const secret of ['FEISHU_APP_SECRET', 'FEISHU_SPREADSHEET_TOKEN', 'FEISHU_APP_ID']) {
     const block = render.slice(render.indexOf(`key: ${secret}`), render.indexOf(`key: ${secret}`) + 90);

@@ -37,7 +37,7 @@ export async function GET(request: Request) {
 
 function finish(response: NextResponse): NextResponse {
   const secure = process.env.NODE_ENV === 'production';
-  const options = { httpOnly: true, secure, sameSite: 'lax' as const, path: '/', maxAge: 0 };
+  const options = { httpOnly: true, secure, sameSite: secure ? 'none' as const : 'lax' as const, path: '/', maxAge: 0 };
   response.cookies.set('warehouse_oauth_state', '', options);
   response.cookies.set('warehouse_oauth_verifier', '', options);
   response.headers.set('Cache-Control', 'no-store');
