@@ -219,7 +219,7 @@ export function warehouseReadAdapterFromEnv(): FeishuWarehouseReadAdapter {
 export function parseInventoryRecords(table: TypedSheetData): { records: InventoryCandidate[]; missingQty: number; invalidQty: number } {
   const sku = columnIndex(table, ['SKU', '料号', '物料号', '产品料号']);
   const model = columnIndex(table, ['Model', '机型', '型号']);
-  const location = columnIndex(table, ['Location', '库位', '当前库位']);
+  const location = columnIndex(table, ['Location', '库位', '当前库位', '库位编码']);
   const container = optionalColumnIndex(table, ['Container', '容器', '容器码']);
   const available = columnIndex(table, ['Available Qty', '可用数量', '可用库存', '可用Qty', '当前数量']);
   const condition = columnIndex(table, ['Stock Condition', '库存属性', '属性']);

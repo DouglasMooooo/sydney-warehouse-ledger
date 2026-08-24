@@ -49,3 +49,20 @@ test('malformed inventory quantities are excluded and reported, not coerced to z
   assert.equal(parsed.missingQty, 1);
   assert.deepEqual(parsed.records.map((item) => item.sku), ['SKU-4']);
 });
+
+test('current inventory accepts the live UAT Chinese header schema', () => {
+  const parsed = parseInventoryRecords({
+    name: '当前库存明细查询', range: 'A1:F2',
+    columns: ['料号', '机型', '库位编码', '容器码', '当前数量', '库存属性'],
+    data: [['97-414-00027-00', 'EQ4800-side-cover', 'R1-2-1-L', '', 288, '物料']],
+    dtypes: {},
+  });
+  assert.deepEqual(parsed, {
+    records: [{
+      sku: '97-414-00027-00', model: 'EQ4800-side-cover', location: 'R1-2-1-L',
+      availableQty: 288, condition: '物料',
+    }],
+    missingQty: 0,
+    invalidQty: 0,
+  });
+});

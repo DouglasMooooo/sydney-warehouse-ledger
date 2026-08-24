@@ -21,7 +21,7 @@ export default async function DashboardPage() {
         <div><p className="eyebrow">OPERATIONS OVERVIEW</p><h2>Dashboard</h2><p>Sydney business date · {today}</p></div>
         <div className="live-badge">Read only · Live Feishu source</div>
       </header>
-      {!snapshot ? <div className="notice error"><strong>系统读取失败</strong><br />请检查服务端飞书配置和 CLI 登录状态。页面不会使用缓存库存或静默回退。</div> : <DashboardContent snapshot={snapshot} />}
+      {!snapshot ? <div className="notice error"><strong>系统读取失败</strong><br />请检查服务端飞书表格配置和工作表结构。页面不会使用缓存库存或静默回退。</div> : <DashboardContent snapshot={snapshot} />}
     </>
   );
 }
