@@ -1,12 +1,10 @@
-import { createHash } from 'node:crypto';
-
 export interface VerifiedFeishuUser {
   openId: string;
   displayName?: string;
 }
 
 export interface FeishuIdentityProvider {
-  resolveUser(authCode: string, codeVerifier: string): Promise<VerifiedFeishuUser>;
+  resolveUser(authCode: string): Promise<VerifiedFeishuUser>;
 }
 
 export interface FeishuOAuthConfig {
@@ -28,11 +26,11 @@ export class FeishuIdentityError extends Error {
 export class FeishuOAuthIdentityProvider implements FeishuIdentityProvider {
   constructor(private readonly config: FeishuOAuthConfig, private readonly fetchImpl: typeof fetch = fetch) {}
 
-  async resolveUser(authCode: string, codeVerifier: string): Promise<VerifiedFeishuUser> {
-    if (!authCode.trim() || !codeVerifier.trim()) throw new FeishuIdentityError('Invalid Feishu login code.', 'INPUT');
+  async resolveUser(authCode: string): Promise<VerifiedFeishuUser> {
+    if (!authCode.trim()) throw new FeishuIdentityError('Invalid Feishu login code.', 'INPUT');
     const tokenRequest = new URLSearchParams({
       grant_type: 'authorization_code', client_id: this.config.appId, client_secret: this.config.appSecret,
-      code: authCode, redirect_uri: this.config.redirectUri, code_verifier: codeVerifier,
+      code: authCode, redirect_uri: this.config.redirectUri,
     });
     const tokenResponse = await this.fetchImpl('https://accounts.feishu.cn/oauth/v3/token', {
       method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' }, body: tokenRequest,
@@ -54,14 +52,15 @@ export class FeishuOAuthIdentityProvider implements FeishuIdentityProvider {
   }
 }
 
-export function createFeishuAuthorizationUrl(config: FeishuOAuthConfig, state: string, codeVerifier: string): string {
+// Feishu documents PKCE as optional for confidential server applications. This
+// flow authenticates the token exchange with the server-only client secret and
+// retains the short-lived state cookie for login CSRF protection.
+export function createFeishuAuthorizationUrl(config: FeishuOAuthConfig, state: string): string {
   const url = new URL('https://accounts.feishu.cn/open-apis/authen/v1/authorize');
   url.searchParams.set('client_id', config.appId);
   url.searchParams.set('response_type', 'code');
   url.searchParams.set('redirect_uri', config.redirectUri);
   url.searchParams.set('state', state);
-  url.searchParams.set('code_challenge_method', 'S256');
-  url.searchParams.set('code_challenge', createHash('sha256').update(codeVerifier).digest('base64url'));
   if (config.scopes?.length) url.searchParams.set('scope', config.scopes.join(' '));
   return url.toString();
 }

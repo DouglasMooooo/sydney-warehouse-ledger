@@ -3,7 +3,7 @@ import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import test from 'node:test';
 import { assertReadOnlyRelease } from '../src/safety/readOnlyRelease.js';
 
-test('OAuth responses preserve temporary cookies across the Feishu callback, clear them, and have no open redirect input', () => {
+test('OAuth responses preserve and clear the state cookie, omit incompatible PKCE, and have no open redirect input', () => {
   const start = readFileSync('app/api/auth/feishu/start/route.ts', 'utf8');
   const callback = readFileSync('app/api/auth/feishu/callback/route.ts', 'utf8');
   for (const source of [start, callback]) assert(source.includes("Cache-Control', 'no-store"));
@@ -13,9 +13,10 @@ test('OAuth responses preserve temporary cookies across the Feishu callback, cle
   }
   assert(start.includes('const secure = runtime === \'production\''));
   assert(start.includes("response.cookies.set('warehouse_oauth_state', state, options)"));
-  assert(start.includes("response.cookies.set('warehouse_oauth_verifier', verifier, options)"));
   assert(callback.includes("response.cookies.set('warehouse_oauth_state', '', options)"));
-  assert(callback.includes("response.cookies.set('warehouse_oauth_verifier', '', options)"));
+  assert(!start.includes('warehouse_oauth_verifier'));
+  assert(!callback.includes('warehouse_oauth_verifier'));
+  assert(!start.includes('code_challenge'));
   assert(callback.includes("stage: error.stage, providerCode: error.providerCode ?? null"));
   assert(callback.includes("new URL('/dashboard', request.url)"));
   assert(callback.includes('{ status: 403'));

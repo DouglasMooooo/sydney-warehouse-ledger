@@ -12,12 +12,11 @@ export async function GET(request: Request) {
   const code = url.searchParams.get('code') ?? '';
   const state = url.searchParams.get('state') ?? '';
   const cookies = parseCookies(request.headers.get('cookie'));
-  if (!safeEqual(state, cookies.warehouse_oauth_state) || !cookies.warehouse_oauth_verifier || !code) {
+  if (!safeEqual(state, cookies.warehouse_oauth_state) || !code) {
     return finish(NextResponse.json(apiFailure('AUTHENTICATION_REQUIRED', '飞书登录状态无效或已过期。'), { status: 401 }));
   }
   try {
-    const user = await new FeishuOAuthIdentityProvider(feishuOAuthConfigFromEnv())
-      .resolveUser(code, cookies.warehouse_oauth_verifier);
+    const user = await new FeishuOAuthIdentityProvider(feishuOAuthConfigFromEnv()).resolveUser(code);
     const roles = rolesForFeishuUser(user.openId);
     if (roles.length === 0) return finish(new NextResponse(
       '<!doctype html><html lang="zh-CN"><meta charset="utf-8"><title>无访问权限</title><body><main><h1>当前账号未获得仓库系统权限</h1><p>请联系仓库系统管理员配置 UAT 角色。</p><a href="/">返回登录页</a></main></body></html>',
@@ -42,7 +41,6 @@ function finish(response: NextResponse): NextResponse {
   const secure = process.env.NODE_ENV === 'production';
   const options = { httpOnly: true, secure, sameSite: secure ? 'none' as const : 'lax' as const, path: '/', maxAge: 0 };
   response.cookies.set('warehouse_oauth_state', '', options);
-  response.cookies.set('warehouse_oauth_verifier', '', options);
   response.headers.set('Cache-Control', 'no-store');
   return response;
 }
