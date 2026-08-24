@@ -18,27 +18,36 @@ export interface FeishuOAuthConfig {
 
 export class FeishuIdentityError extends Error {
   readonly code = 'AUTHENTICATION_REQUIRED';
+
+  constructor(message: string, readonly stage: 'INPUT' | 'TOKEN_EXCHANGE' | 'USER_INFO' | 'CONFIGURATION' = 'CONFIGURATION', readonly providerCode?: number) {
+    super(message);
+    this.name = 'FeishuIdentityError';
+  }
 }
 
 export class FeishuOAuthIdentityProvider implements FeishuIdentityProvider {
   constructor(private readonly config: FeishuOAuthConfig, private readonly fetchImpl: typeof fetch = fetch) {}
 
   async resolveUser(authCode: string, codeVerifier: string): Promise<VerifiedFeishuUser> {
-    if (!authCode.trim() || !codeVerifier.trim()) throw new FeishuIdentityError('Invalid Feishu login code.');
-    const tokenResponse = await this.fetchImpl('https://accounts.feishu.cn/oauth/v3/token', {
-      method: 'POST', headers: { 'content-type': 'application/json; charset=utf-8' },
-      body: JSON.stringify({
-        grant_type: 'authorization_code', client_id: this.config.appId, client_secret: this.config.appSecret,
-        code: authCode, redirect_uri: this.config.redirectUri, code_verifier: codeVerifier,
-      }),
+    if (!authCode.trim() || !codeVerifier.trim()) throw new FeishuIdentityError('Invalid Feishu login code.', 'INPUT');
+    const tokenRequest = new URLSearchParams({
+      grant_type: 'authorization_code', client_id: this.config.appId, client_secret: this.config.appSecret,
+      code: authCode, redirect_uri: this.config.redirectUri, code_verifier: codeVerifier,
     });
-    const token = await safeJson(tokenResponse) as { code?: number; access_token?: string; error?: string };
-    if (!tokenResponse.ok || token.code !== 0 || !token.access_token) throw new FeishuIdentityError('Feishu login code verification failed.');
+    const tokenResponse = await this.fetchImpl('https://accounts.feishu.cn/oauth/v3/token', {
+      method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' }, body: tokenRequest,
+    });
+    const token = await safeJson(tokenResponse, 'TOKEN_EXCHANGE') as { code?: number; access_token?: string; error?: string };
+    if (!tokenResponse.ok || token.code !== 0 || !token.access_token) {
+      throw new FeishuIdentityError('Feishu login code verification failed.', 'TOKEN_EXCHANGE', numericCode(token.code));
+    }
     const userResponse = await this.fetchImpl('https://open.feishu.cn/open-apis/authen/v1/user_info', {
       headers: { authorization: `Bearer ${token.access_token}` },
     });
-    const user = await safeJson(userResponse) as { code?: number; data?: { open_id?: string; name?: string } };
-    if (!userResponse.ok || user.code !== 0 || !user.data?.open_id) throw new FeishuIdentityError('Feishu user verification failed.');
+    const user = await safeJson(userResponse, 'USER_INFO') as { code?: number; data?: { open_id?: string; name?: string } };
+    if (!userResponse.ok || user.code !== 0 || !user.data?.open_id) {
+      throw new FeishuIdentityError('Feishu user verification failed.', 'USER_INFO', numericCode(user.code));
+    }
     const result: VerifiedFeishuUser = { openId: user.data.open_id };
     if (user.data.name) result.displayName = user.data.name;
     return result;
@@ -65,12 +74,16 @@ export function feishuOAuthConfigFromEnv(env: Readonly<Record<string, string | u
   return scopes.length ? { appId, appSecret, redirectUri, scopes } : { appId, appSecret, redirectUri };
 }
 
-async function safeJson(response: Response): Promise<unknown> {
-  try { return await response.json(); } catch { throw new FeishuIdentityError('Invalid Feishu identity response.'); }
+async function safeJson(response: Response, stage: 'TOKEN_EXCHANGE' | 'USER_INFO'): Promise<unknown> {
+  try { return await response.json(); } catch { throw new FeishuIdentityError('Invalid Feishu identity response.', stage); }
 }
 
 function required(env: Readonly<Record<string, string | undefined>>, name: string): string {
   const value = env[name]?.trim();
-  if (!value) throw new FeishuIdentityError(`Missing server identity configuration: ${name}`);
+  if (!value) throw new FeishuIdentityError(`Missing server identity configuration: ${name}`, 'CONFIGURATION');
   return value;
+}
+
+function numericCode(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isInteger(value) ? value : undefined;
 }

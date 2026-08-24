@@ -1,7 +1,7 @@
 import { timingSafeEqual } from 'node:crypto';
 import { NextResponse } from 'next/server';
 import { apiFailure } from '../../../../../src/application/apiResponse';
-import { FeishuOAuthIdentityProvider, feishuOAuthConfigFromEnv } from '../../../../../src/auth/feishuIdentity';
+import { FeishuIdentityError, FeishuOAuthIdentityProvider, feishuOAuthConfigFromEnv } from '../../../../../src/auth/feishuIdentity';
 import { rolesForFeishuUser } from '../../../../../src/auth/roleMapping';
 import { createSessionToken, sessionCookieName, sessionCookieOptions } from '../../../../../src/auth/session';
 
@@ -30,7 +30,10 @@ export async function GET(request: Request) {
     const response = NextResponse.redirect(new URL('/dashboard', request.url));
     response.cookies.set(sessionCookieName(runtime), createSessionToken(context, secret), sessionCookieOptions(runtime));
     return finish(response);
-  } catch {
+  } catch (error) {
+    if (error instanceof FeishuIdentityError) {
+      console.error('Feishu OAuth identity failed', { stage: error.stage, providerCode: error.providerCode ?? null });
+    }
     return finish(NextResponse.json(apiFailure('AUTHENTICATION_REQUIRED', '飞书身份验证失败。'), { status: 401 }));
   }
 }

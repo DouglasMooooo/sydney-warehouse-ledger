@@ -16,6 +16,7 @@ test('OAuth responses preserve temporary cookies across the Feishu callback, cle
   assert(start.includes("response.cookies.set('warehouse_oauth_verifier', verifier, options)"));
   assert(callback.includes("response.cookies.set('warehouse_oauth_state', '', options)"));
   assert(callback.includes("response.cookies.set('warehouse_oauth_verifier', '', options)"));
+  assert(callback.includes("stage: error.stage, providerCode: error.providerCode ?? null"));
   assert(callback.includes("new URL('/dashboard', request.url)"));
   assert(callback.includes('{ status: 403'));
   assert(callback.includes('当前账号未获得仓库系统权限'));
