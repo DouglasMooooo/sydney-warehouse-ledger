@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { apiFailure, apiSuccess, clientSafeError, serverSafeErrorSummary } from '../../../../../src/application/apiResponse';
 import { prepareParsedWorkOrderBatchPreview, type MultiFileWorkOrderPreview } from '../../../../../src/application/workOrderBatchPreview';
+import { nextPickupCode } from '../../../../../src/application/workOrderPreview';
 import { authenticateWarehouseRequest } from '../../../../../src/auth/requestAuth';
 import { expensiveOperationLimiter } from '../../../../../src/security/rateLimit';
 import { warehouseReadAdapterFromEnv } from '../../../../../src/feishu/warehouseReadAdapter';
@@ -39,6 +40,18 @@ export async function POST(request: Request) {
         bytes: new Uint8Array(await file.arrayBuffer()), sourceFileName: file.name,
       });
       documents.push(await prepareParsedWorkOrderBatchPreview(parsed, businessDate.trim(), adapter));
+    }
+    const pickupCodes = await adapter.readPickupCodes();
+    for (const document of documents) {
+      if (!document.sh || document.errors.length || !document.lines.length) continue;
+      const pickupCode = nextPickupCode(pickupCodes);
+      if (!pickupCode) break;
+      pickupCodes.push(pickupCode);
+      for (const line of document.lines) {
+        if (!line.preview.proposedPreparedRow) continue;
+        line.preview.pickupCode = { value: pickupCode, committed: false, label: 'Preview / not yet committed' };
+        line.preview.proposedPreparedRow.pickupCode = pickupCode;
+      }
     }
     const preview: MultiFileWorkOrderPreview = { mode:'PREVIEW_ONLY', zeroWritesPerformed:true, documents,
       summary:{files:documents.length,workOrders:documents.filter(item=>item.sh).length,

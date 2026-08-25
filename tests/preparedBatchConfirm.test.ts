@@ -13,8 +13,8 @@ test('multi-file preparation keeps work orders separate, assigns unique pickup c
   let captured:unknown;
   const writer={append:async(rows:unknown)=>{captured=rows;return{rows:[20,21,22],verified:true as const,reconciliation:'PASS' as const};}};
   const result=await confirmPreparedWorkOrderBatch({businessDate:'2026-08-25',workOrders:[
-    {sh:'SH-1',sourceFileName:'one.xlsx',lines:[{sku:'SKU-GOOD',erpWarehouse:'悉尼良品仓',location:'FLEX-01',locationConfirmed:true,sns:['SN-A'],sourceRow:7}]},
-    {sh:'SH-2',sourceFileName:'two.xlsx',lines:[{sku:'SKU-NEW',erpWarehouse:'悉尼物料仓',location:'FLEX-01',locationConfirmed:true,sns:['SN-B','SN-C'],sourceRow:8}]},
+    {sh:'SH-1',pickupCode:'SYD-00010',sourceFileName:'one.xlsx',lines:[{sku:'SKU-GOOD',erpWarehouse:'悉尼良品仓',location:'FLEX-01',locationConfirmed:true,sns:['SN-A'],sourceRow:7}]},
+    {sh:'SH-2',pickupCode:'SYD-00011',sourceFileName:'two.xlsx',lines:[{sku:'SKU-NEW',erpWarehouse:'悉尼物料仓',location:'FLEX-01',locationConfirmed:true,sns:['SN-B','SN-C'],sourceRow:8}]},
   ]},port,writer,{READ_ONLY_RELEASE:'false',CONTROLLED_WRITE_UAT:'true'});
   assert.deepEqual(result.workOrders,[{sh:'SH-1',pickupCode:'SYD-00010'},{sh:'SH-2',pickupCode:'SYD-00011'}]);
   assert.deepEqual(result.labels.map(label=>[label.sh,label.pickupCode,label.lines[0]?.stockCondition,label.lines[0]?.qty]),[
@@ -26,4 +26,10 @@ test('multi-file preparation keeps work orders separate, assigns unique pickup c
   assert.deepEqual(new Set(rows.filter(row=>row.shNo==='SH-1').map(row=>row.pickupCode)),new Set(['SYD-00010']));
   assert.deepEqual(new Set(rows.filter(row=>row.shNo==='SH-2').map(row=>row.pickupCode)),new Set(['SYD-00011']));
   assert(rows.every(row=>row.remark.includes('Replacement source=')));
+});
+
+test('printed pickup code fails closed if another write consumed it before confirmation',async()=>{
+  await assert.rejects(()=>confirmPreparedWorkOrderBatch({businessDate:'2026-08-25',workOrders:[
+    {sh:'SH-1',pickupCode:'SYD-00011',lines:[{sku:'SKU-GOOD',erpWarehouse:'悉尼良品仓',location:'FLEX-01',locationConfirmed:true,sns:['SN-A']}]},
+  ]},port,{append:async()=>({rows:[1],verified:true as const,reconciliation:'PASS' as const})},{READ_ONLY_RELEASE:'false',CONTROLLED_WRITE_UAT:'true'}),/STALE_PICKUP_CODE_REIMPORT_REQUIRED/);
 });

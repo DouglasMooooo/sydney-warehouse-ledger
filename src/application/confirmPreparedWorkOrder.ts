@@ -25,7 +25,7 @@ export interface PreparedConfirmInput {
 
 export interface PreparedBatchConfirmInput {
   businessDate: string;
-  workOrders: Array<{ sh: string; sourceFileName?: string; lines: PreparedConfirmLine[] }>;
+  workOrders: Array<{ sh: string; pickupCode?: string; sourceFileName?: string; lines: PreparedConfirmLine[] }>;
 }
 
 export interface PreparedPrintLabel {
@@ -73,8 +73,10 @@ export async function confirmPreparedWorkOrderBatch(
     const sh = workOrder.sh?.trim();
     if (!sh || usedSh.has(sh) || !workOrder.lines.length) throw new TypeError('INVALID_OR_DUPLICATE_PREPARED_SH');
     usedSh.add(sh);
-    const pickupCode = nextPickupCode(existingCodes);
-    if (!pickupCode) throw new TypeError('PICKUP_CODE_UNAVAILABLE');
+    const nextCode = nextPickupCode(existingCodes);
+    if (!nextCode) throw new TypeError('PICKUP_CODE_UNAVAILABLE');
+    const pickupCode = workOrder.pickupCode?.trim() || nextCode;
+    if (pickupCode !== nextCode) throw new TypeError('STALE_PICKUP_CODE_REIMPORT_REQUIRED');
     existingCodes.push(pickupCode);
     const labelGroups = new Map<string, PreparedPrintLabel['lines'][number]>();
 

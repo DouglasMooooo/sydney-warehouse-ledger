@@ -16,11 +16,12 @@ import { LarkCliWarehouseSheetReader, warehouseSheetReaderFromEnv, type Warehous
 import { canonicalizeSn, normalizeSn } from '../snResolver/resolver.js';
 import type { VerifiedSnMapping } from '../snResolver/types.js';
 import type { MaterialOption, SnOperationalState, SnResolverContext } from '../application/badMachineReceive.js';
+import { deriveWeeklyWarehouseReport, type WeeklyManualMetrics, type WeeklyWarehouseReport } from '../application/weeklyReport.js';
 
 const MAIN = {
   date: 0, outboundDate: 1, action: 2, sh: 3, pickup: 4, container: 5,
   sku: 6, model: 7, sn: 9, qty: 10, fromLocation: 11, toLocation: 12,
-  erpWarehouse: 13, stockCondition: 15,
+  erpWarehouse: 13, stockCondition: 15, remark: 21,
 } as const;
 
 export interface FeishuWarehouseReadConfig {
@@ -223,6 +224,29 @@ export class FeishuWarehouseReadAdapter implements WarehouseReadPort {
     return { exceptions, supportedCodes: LIVE_OPERATIONAL_EXCEPTION_CODES };
   }
 
+  async readWeeklyReport(asOf: BusinessDate): Promise<WeeklyWarehouseReport> {
+    const [main, inventory, manual] = await Promise.all([this.readMain(), this.readInventory(), this.readWeeklyManualMetrics(asOf)]);
+    const rows = main.data.slice(1).filter(row => text(row[MAIN.action])).map((row, index) => toOperationalLedgerRow(row, index + 2));
+    return deriveWeeklyWarehouseReport(rows, parseInventoryRecords(inventory).records, asOf, manual);
+  }
+
+  private async readWeeklyManualMetrics(asOf: BusinessDate): Promise<WeeklyManualMetrics> {
+    try {
+      const table = await this.reader.readTable({ sheetName: '维修周数据录入', noHeader: true, range: 'A1:M201' });
+      const start = mondayOf(asOf);
+      const row = table.data.find(item => businessDate(item[0]) === start);
+      if (!row) return {};
+      const metric = (index: number) => { const parsed=parseSourceNumber(row[index]); return parsed.kind==='valid'?parsed.value:undefined; };
+      return {
+        ...(metric(2)!==undefined?{returnedForRepair:metric(2)!}:{}), ...(metric(3)!==undefined?{repairCompleted:metric(3)!}:{}),
+        ...(metric(4)!==undefined?{repairScrapped:metric(4)!}:{}), ...(metric(5)!==undefined?{repairedGoodShipped:metric(5)!}:{}),
+        ...(metric(6)!==undefined?{scrapOutbound:metric(6)!}:{}), ...(metric(7)!==undefined?{pendingScrap:metric(7)!}:{}),
+        ...(metric(8)!==undefined?{repairedGoodInbound:metric(8)!}:{}), ...(metric(9)!==undefined?{currentPendingRepair:metric(9)!}:{}),
+        ...(metric(10)!==undefined?{currentRepairedGood:metric(10)!}:{}), ...(text(row[12])?{note:text(row[12])}:{}),
+      };
+    } catch { return {}; }
+  }
+
   async readSnResolverContext(sns: readonly string[]): Promise<SnResolverContext> {
     const [main, products] = await Promise.all([
       this.readMain(),
@@ -367,9 +391,16 @@ function sourceNumberOrNull(value: unknown): number | null {
   return parsed.kind === 'valid' ? parsed.value : null;
 }
 
-function businessDate(value: unknown): string {
-  return text(value).slice(0, 10);
+export function businessDateFromSheetValue(value: unknown): string {
+  if (typeof value === 'number' && Number.isFinite(value)) return new Date(Date.UTC(1899, 11, 30) + value * 86_400_000).toISOString().slice(0, 10);
+  const source = text(value);
+  const iso = /^(\d{4}-\d{2}-\d{2})/.exec(source)?.[1];
+  if (iso) return iso;
+  const au = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(source);
+  if (au) return `${au[3]}-${au[2]!.padStart(2, '0')}-${au[1]!.padStart(2, '0')}`;
+  return '';
 }
+function businessDate(value: unknown): string { return businessDateFromSheetValue(value); }
 
 function toOperationalLedgerRow(row: TypedSheetData['data'][number], ledgerRow: number): OperationalLedgerRow {
   const qty = parseSourceNumber(row[MAIN.qty]);
@@ -381,7 +412,7 @@ function toOperationalLedgerRow(row: TypedSheetData['data'][number], ledgerRow: 
     ...(qty.kind === 'valid' ? { qty: qty.value } : {}),
     erpWarehouse: text(row[MAIN.erpWarehouse]), fromLocation: text(row[MAIN.fromLocation]),
     toLocation: text(row[MAIN.toLocation]), container: text(row[MAIN.container]),
-    sn: text(row[MAIN.sn]), stockCondition: text(row[MAIN.stockCondition]),
+    sn: text(row[MAIN.sn]), stockCondition: text(row[MAIN.stockCondition]), remark: text(row[MAIN.remark]),
   };
 }
 

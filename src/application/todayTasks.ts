@@ -19,6 +19,7 @@ export interface OperationalLedgerRow {
   container: string;
   sn: string;
   stockCondition: string;
+  remark?: string;
 }
 
 export interface OperationalTaskDetail {
