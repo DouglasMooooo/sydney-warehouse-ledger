@@ -35,6 +35,25 @@ export interface InventoryCandidate {
   condition: '新机' | '维修良品' | '待修' | '报废' | '物料';
 }
 
+export interface CurrentSerializedInventory {
+  sn: string;
+  sku: string;
+  location: string;
+  containerCode?: string;
+  stockCondition: InventoryCandidate['condition'];
+  currentState: 'REPAIR' | 'GOOD' | 'PREPARED' | 'OUTBOUND' | 'SCRAPPED' | 'UNKNOWN';
+}
+
+export interface PreparedTransaction {
+  shNo: string;
+  pickupCode: string;
+  sku: string;
+  location: string;
+  containerCode?: string;
+  erpWarehouse: string;
+  stockCondition: InventoryCandidate['condition'];
+}
+
 export interface ProductRecord {
   sku: string;
   model: string;
@@ -82,6 +101,8 @@ export interface WarehouseReadPort {
     qty: number,
   ): Promise<InventoryCandidate[]>;
   readPickupCodes(): Promise<string[]>;
+  findCurrentSerializedInventory?(sn: string): Promise<CurrentSerializedInventory | undefined>;
+  findPreparedByReference?(reference: string, sn: string): Promise<PreparedTransaction | undefined>;
 }
 
 export interface InventoryQueryService {

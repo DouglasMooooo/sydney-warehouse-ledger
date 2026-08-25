@@ -1,7 +1,10 @@
 import { todayInSydney } from '../../../src/ledger/businessDate';
 import { authenticateWarehousePage } from '../../../src/auth/pageAuth';
 import { OperationsClient } from './operations-client';
+import { hasWarehousePermission } from '../../../src/auth/permissions';
 export default async function Page() {
-  try { await authenticateWarehousePage('MOVE_CONFIRM'); } catch { return <div className="notice error">当前账号没有库存事务权限。</div>; }
-  return <><header className="console-header"><div><h2>库存事务 <small>受控 UAT 写入</small></h2><p>入库、出库、移库、库存调增与调减。出库继续执行严格工单校验。</p></div><div className="write-live">写入已开放 · 每笔写后复核</div></header><OperationsClient businessDate={todayInSydney()}/></>;
+  let auth;
+  try { auth = await authenticateWarehousePage('MOVE_CONFIRM'); } catch { return <div className="notice error">当前账号没有库存事务权限。</div>; }
+  const canAdjust = hasWarehousePermission(auth.user.roles, 'ADJUSTMENT_MANAGE');
+  return <><header className="console-header"><div><h2>库存作业 <small>业务流程驱动</small></h2><p>选择员工理解的业务流程；底层库存动作由系统自动决定。</p></div><div className="write-live">READ → VALIDATE → PREVIEW → CONFIRM → WRITE → VERIFY</div></header><OperationsClient businessDate={todayInSydney()} canAdjust={canAdjust}/></>;
 }

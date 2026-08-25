@@ -6,7 +6,6 @@ import { ArrowRight, CheckCircle, FileXls, MagnifyingGlass, MapPin, UploadSimple
 import type { ApiResponse } from '../../../src/application/apiResponse';
 import { evaluatePreparedCompletion } from '../../../src/application/preparedCompletion';
 import type { WorkOrderBatchPreview } from '../../../src/application/workOrderBatchPreview';
-import type { LedgerAction } from '../../../src/config/controlledValues';
 import { ControlledActionPanel } from '../controlled-action-panel';
 import { WarehouseMatrix, type MatrixLocation } from '../warehouse-layout/warehouse-matrix';
 
@@ -14,7 +13,6 @@ interface LineDraft { snText: string; location: string; locationConfirmed: boole
 
 export function WorkOrderPreviewClient({ initialBusinessDate, locations }: { initialBusinessDate: string; locations: MatrixLocation[] }) {
   const [businessDate, setBusinessDate] = useState(initialBusinessDate);
-  const [action, setAction] = useState<LedgerAction>('备货');
   const [file, setFile] = useState<File>();
   const [preview, setPreview] = useState<WorkOrderBatchPreview>();
   const [systemError, setSystemError] = useState<string>();
@@ -82,7 +80,7 @@ export function WorkOrderPreviewClient({ initialBusinessDate, locations }: { ini
 
   return <div className="operations-console">
     <aside className="console-rail">
-      <ControlledActionPanel action={action} onActionChange={setAction} />
+      <ControlledActionPanel action="备货" workflow="工单备货" effect="不扣库存" />
       <form onSubmit={submit} className="import-panel">
         <label>悉尼业务日<input type="date" value={businessDate} onChange={(event) => setBusinessDate(event.target.value)} required /></label>
         <input ref={fileInput} className="sr-only" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" onChange={(event) => setFile(event.target.files?.[0])} />

@@ -220,3 +220,17 @@ test('XLSX decoder is server-only and the browser sends binary FormData to expli
   assert(!client.includes('ExcelJS'));
   assert(!client.includes('file.text()'));
 });
+
+test('business workflow UI derives ledger actions instead of exposing an action selector', () => {
+  const prepared = readFileSync('app/(warehouse)/work-orders/preview-client.tsx', 'utf8');
+  const operations = readFileSync('app/(warehouse)/moves/operations-client.tsx', 'utf8');
+  const execute = readFileSync('app/api/warehouse/operations/execute/route.ts', 'utf8');
+  assert(prepared.includes('action="备货"'));
+  assert(!prepared.includes('onActionChange'));
+  assert(!prepared.includes("useState<LedgerAction>"));
+  assert(operations.includes("fetch('/api/warehouse/operations/preview'"));
+  assert(operations.includes('ADJUSTMENT_REASONS'));
+  assert(operations.includes('OPENING_BALANCE'));
+  assert(execute.includes("'action' in body"));
+  assert(execute.includes('body.workflow'));
+});

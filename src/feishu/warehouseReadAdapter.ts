@@ -1,7 +1,7 @@
 import { STOCK_CONDITIONS, type StockCondition } from '../config/controlledValues.js';
 import type { BusinessDate } from '../ledger/businessDate.js';
 import type {
-  DashboardSnapshot, InventoryCandidate, ProductRecord, WarehouseReadPort,
+  CurrentSerializedInventory, DashboardSnapshot, InventoryCandidate, PreparedTransaction, ProductRecord, WarehouseReadPort,
 } from '../application/contracts.js';
 import { deriveTodayTasks, type OperationalLedgerRow, type TodayTaskSnapshot } from '../application/todayTasks.js';
 import { formatLocationSummary, summarizeLocations, type LocationInventoryRecord, type LocationSummary } from '../application/locationSummary.js';
@@ -153,6 +153,39 @@ export class FeishuWarehouseReadAdapter implements WarehouseReadPort {
 
   async readPickupCodes(): Promise<string[]> {
     return (await this.readMain()).data.slice(1).map((row) => text(row[MAIN.pickup])).filter(Boolean);
+  }
+
+  async findCurrentSerializedInventory(rawSn: string): Promise<CurrentSerializedInventory | undefined> {
+    const sn = normalizeSn(rawSn);
+    const canonical = canonicalizeSn(sn);
+    const history = (await this.readMain()).data.slice(1)
+      .filter((row) => canonicalizeSn(text(row[MAIN.sn])) === canonical);
+    if (!history.length) return undefined;
+    const latest = history[history.length - 1]!;
+    const state = deriveSnOperationalState(sn, history).currentState;
+    if (state === 'NOT_FOUND') return undefined;
+    const action = text(latest[MAIN.action]);
+    const location = action === '移库' || action === '入库' || action === '退回维修' || action === '库存调增'
+      ? text(latest[MAIN.toLocation]) : text(latest[MAIN.fromLocation]);
+    const condition = text(latest[MAIN.stockCondition]) as StockCondition;
+    const sku = text(latest[MAIN.sku]);
+    if (!sku || !location || !STOCK_CONDITIONS.includes(condition)) return undefined;
+    return { sn, sku, location, stockCondition: condition, currentState: state,
+      ...(text(latest[MAIN.container]) ? { containerCode: text(latest[MAIN.container]) } : {}) };
+  }
+
+  async findPreparedByReference(reference: string, rawSn: string): Promise<PreparedTransaction | undefined> {
+    const normalizedReference = reference.trim().toUpperCase();
+    const sn = normalizeSn(rawSn);
+    const rows = (await this.readMain()).data.slice(1).filter((row) => text(row[MAIN.action]) === '备货'
+      && [text(row[MAIN.pickup]), text(row[MAIN.sh])].some((value) => value.toUpperCase() === normalizedReference));
+    const exact = rows.find((row) => normalizeSn(text(row[MAIN.sn])) === sn) ?? (rows.length === 1 ? rows[0] : undefined);
+    if (!exact) return undefined;
+    const condition = text(exact[MAIN.stockCondition]) as StockCondition;
+    if (!STOCK_CONDITIONS.includes(condition)) return undefined;
+    return { shNo: text(exact[MAIN.sh]), pickupCode: text(exact[MAIN.pickup]), sku: text(exact[MAIN.sku]),
+      location: text(exact[MAIN.fromLocation]), erpWarehouse: text(exact[MAIN.erpWarehouse]), stockCondition: condition,
+      ...(text(exact[MAIN.container]) ? { containerCode: text(exact[MAIN.container]) } : {}) };
   }
 
   async readTodayTasks(asOf: BusinessDate): Promise<TodayTaskSnapshot> {

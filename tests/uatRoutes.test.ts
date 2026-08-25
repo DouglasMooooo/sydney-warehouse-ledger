@@ -45,6 +45,7 @@ test('controlled UAT registers only the reviewed preview, query, and write route
     'app/api/warehouse/ai/query/route.ts',
     'app/api/warehouse/exceptions/deep-scan/route.ts',
     'app/api/warehouse/operations/execute/route.ts',
+    'app/api/warehouse/operations/preview/route.ts',
     'app/api/warehouse/returns/preview/route.ts',
     'app/api/warehouse/work-orders/confirm/route.ts',
     'app/api/warehouse/work-orders/preview/route.ts',

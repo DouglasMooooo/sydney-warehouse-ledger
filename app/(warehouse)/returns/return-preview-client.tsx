@@ -56,7 +56,7 @@ export function ReturnPreviewClient({ initialBusinessDate, operatorName }: { ini
 
   return <div className="operations-console return-console resolver-console">
     <aside className="console-rail">
-      <ControlledActionPanel action="退回维修" />
+      <ControlledActionPanel action="退回维修" workflow="坏机接收" effect="增加待修库存" />
       <form className="import-panel" onSubmit={submit}>
         <div className="auto-field"><span>悉尼业务日</span><strong>{initialBusinessDate}</strong><small>系统自动带入</small></div>
         <label>坏机 SN（每行一个，可从 Excel 粘贴）<textarea className="sn-batch-input" value={snText} onChange={(event) => setSnText(event.target.value)} placeholder={'60KB103061NB141\n60CQ00L0623Y117\n60E5M48R65XX999'} /></label>

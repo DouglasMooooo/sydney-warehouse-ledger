@@ -1,3 +1,12 @@
-'use client';
-import { ACTIONS, ENABLED_STATUSES, ITEM_TYPES, STOCK_CONDITIONS, type LedgerAction } from '../../src/config/controlledValues';
-export function ControlledActionPanel({action,onActionChange}:{action:LedgerAction;onActionChange?:(action:LedgerAction)=>void}){return <section className="control-panel"><div className="panel-kicker">常规动作</div><label>动作代码<select value={action} onChange={e=>onActionChange?.(e.target.value as LedgerAction)}>{ACTIONS.map(item=><option key={item}>{item}</option>)}</select></label><label>物品类型<select defaultValue="成品">{ITEM_TYPES.map(item=><option key={item}>{item}</option>)}</select></label><label>库存属性<select defaultValue={action==='退回维修'?'待修':'新机'}>{STOCK_CONDITIONS.map(item=><option key={item}>{item}</option>)}</select></label><label>启用状态<select defaultValue="是">{ENABLED_STATUSES.map(item=><option key={item}>{item}</option>)}</select></label><div className="enabled-row"><span>发布状态</span><strong>UAT 受控写入</strong></div></section>;}
+import type { LedgerAction } from '../../src/config/controlledValues';
+
+export function ControlledActionPanel({ action, workflow, effect }: { action: LedgerAction; workflow: string; effect: string }) {
+  return <section className="control-panel workflow-context">
+    <div className="panel-kicker">当前业务流程</div>
+    <strong className="workflow-name">{workflow}</strong>
+    <div className="readonly-action"><span>库存动作</span><b>{action}</b></div>
+    <div className="readonly-action"><span>库存影响</span><b>{effect}</b></div>
+    <p>动作由系统根据流程自动确定，不能在表单中切换。</p>
+    <div className="enabled-row"><span>发布状态</span><strong>UAT 受控写入</strong></div>
+  </section>;
+}
