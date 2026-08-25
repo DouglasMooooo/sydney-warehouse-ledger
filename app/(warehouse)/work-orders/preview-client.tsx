@@ -1,18 +1,95 @@
 'use client';
+
 import Link from 'next/link';
-import { useMemo,useRef,useState,type FormEvent } from 'react';
-import { ArrowRight,FileXls,LockSimple,MagnifyingGlass,UploadSimple,WarningCircle } from '@phosphor-icons/react';
+import { useMemo, useRef, useState, type FormEvent } from 'react';
+import { ArrowRight, CheckCircle, FileXls, LockSimple, MagnifyingGlass, MapPin, UploadSimple, WarningCircle } from '@phosphor-icons/react';
 import type { ApiResponse } from '../../../src/application/apiResponse';
+import { evaluatePreparedCompletion } from '../../../src/application/preparedCompletion';
 import type { WorkOrderBatchPreview } from '../../../src/application/workOrderBatchPreview';
 import type { LedgerAction } from '../../../src/config/controlledValues';
 import { ControlledActionPanel } from '../controlled-action-panel';
 
-export function WorkOrderPreviewClient({initialBusinessDate}:{initialBusinessDate:string}){
- const [businessDate,setBusinessDate]=useState(initialBusinessDate),[action,setAction]=useState<LedgerAction>('备货');
- const [file,setFile]=useState<File>(),[preview,setPreview]=useState<WorkOrderBatchPreview>(),[systemError,setSystemError]=useState<string>(),[loading,setLoading]=useState(false),[selected,setSelected]=useState(0); const fileInput=useRef<HTMLInputElement>(null);
- async function submit(event:FormEvent){event.preventDefault();if(!file)return;setLoading(true);setSystemError(undefined);setPreview(undefined);try{const form=new FormData();form.set('businessDate',businessDate);form.set('file',file);const response=await fetch('/api/warehouse/work-orders/preview',{method:'POST',body:form});const payload=await response.json() as ApiResponse<WorkOrderBatchPreview>;if(!payload.ok)throw new Error(`${payload.error.code} · ${payload.error.message}`);setPreview(payload.data);setSelected(0);}catch(error){setSystemError(error instanceof Error?error.message:'系统读取失败');}finally{setLoading(false);}}
- const rows=preview?.lines??[],active=rows[selected]?.preview,errorCount=preview?.errors.length??0,validCount=rows.filter(item=>item.preview.proposedPreparedRow&&item.preview.errors.length===0).length,fileName=file?.name??'尚未选择工单';const searchLabel=useMemo(()=>preview?`${rows.length} 行 · ${errorCount} 个阻塞`:'等待导入',[preview,rows.length,errorCount]);
- return <div className="operations-console"><aside className="console-rail"><ControlledActionPanel action={action} onActionChange={setAction}/><form onSubmit={submit} className="import-panel"><label>悉尼业务日<input type="date" value={businessDate} onChange={event=>setBusinessDate(event.target.value)} required/></label><input ref={fileInput} className="sr-only" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" onChange={event=>setFile(event.target.files?.[0])}/><button className="file-picker" type="button" onClick={()=>fileInput.current?.click()}><FileXls size={21}/><span>{fileName}</span></button><button className="outline-button" disabled={loading||!file} type="submit"><UploadSimple size={18}/>{loading?'解析与读取库存…':'导入 Replacement XLSX'}</button></form><Link className="secondary-workflow" href="/returns"><span><strong>批量退回返修</strong><small>读取 Faulty Unit，默认 REPAIR-01</small></span><ArrowRight size={18}/></Link></aside>
- <section className="console-main"><div className="job-summary"><div><h3>{preview?.sh??'等待导入 RMA 工单'}</h3><p>{fileName}</p></div><span>{preview?'只读预览':'未开始'}</span></div><div className="job-stats"><span>总行数 <b>{rows.length}</b></span><span>有效 <b>{validCount}</b></span><span>警告 <b>{preview?.warnings.length??0}</b></span><span>阻塞 <b>{errorCount}</b></span></div><div className="table-tools"><div><MagnifyingGlass size={17}/>{searchLabel}</div><span>行类型：Replacement</span><span>数据源：实时飞书库存</span></div>{systemError&&<div className="inline-alert danger"><WarningCircle size={19}/>{systemError}</div>}{!preview&&!systemError&&<div className="console-empty"><UploadSimple size={36}/><strong>导入一份 RMA XLSX</strong><span>系统只读取 Replacement Unit information，Faulty Unit 不会混入。</span></div>}{preview&&<div className="console-table-wrap"><table className="console-table"><thead><tr><th>行</th><th>SKU</th><th>机型</th><th>数量</th><th>库存属性</th><th>推荐库位</th><th>可用库存</th><th>状态</th></tr></thead><tbody>{rows.map((item,index)=>{const row=item.preview.proposedPreparedRow,blocked=item.preview.errors.length>0;return <tr className={selected===index?'selected':''} onClick={()=>setSelected(index)} key={`${item.sourceRow??index}-${row?.sku??index}`}><td>{item.sourceRow??'—'}</td><td>{row?.sku??item.preview.extracted.replacementSku??'—'}</td><td>{row?.model??'—'}</td><td>{row?.qty??item.preview.extracted.qty??'—'}</td><td>{row?.stockCondition??'—'}</td><td>{row?.fromLocation??'—'}</td><td>{item.preview.recommendation?.availableQty??'—'}</td><td><span className={`row-status ${blocked?'blocked':'ok'}`}>{blocked?'阻塞':'匹配'}</span></td></tr>;})}</tbody></table></div>}{preview?.warnings.map(warning=><div className="inline-alert warning" key={warning}><WarningCircle size={18}/>{warning}</div>)}</section>
- <aside className="detail-panel"><h3>行详情</h3>{!active?<div className="detail-empty">选择一行查看库存与校验结果。</div>:<><dl><dt>SKU</dt><dd>{active.proposedPreparedRow?.sku??active.extracted.replacementSku??'—'}</dd><dt>机型</dt><dd>{active.proposedPreparedRow?.model??'—'}</dd><dt>数量</dt><dd>{active.proposedPreparedRow?.qty??active.extracted.qty??'—'}</dd><dt>建议来源库位</dt><dd>{active.proposedPreparedRow?.fromLocation??'无可用库位'}</dd></dl><div className="detail-section"><h4>可用库存（替换件）</h4><strong className={active.recommendation?'qty-good':'qty-bad'}>{active.recommendation?.availableQty??0}</strong><p>{active.recommendation?'已找到满足数量的单一库位。':'当前库存无法满足本行需求。'}</p></div>{active.errors.length>0&&<div className="detail-section"><h4>阻塞 / 警告</h4>{active.errors.map(error=><p className="danger-text" key={error.code}>{error.code} · {error.message}</p>)}</div>}</>}<button className="locked-action" disabled><LockSimple size={18}/>确认并写入（UAT 锁定）</button></aside></div>;
+interface LineDraft { snText: string; location: string; locationConfirmed: boolean }
+
+export function WorkOrderPreviewClient({ initialBusinessDate }: { initialBusinessDate: string }) {
+  const [businessDate, setBusinessDate] = useState(initialBusinessDate);
+  const [action, setAction] = useState<LedgerAction>('备货');
+  const [file, setFile] = useState<File>();
+  const [preview, setPreview] = useState<WorkOrderBatchPreview>();
+  const [systemError, setSystemError] = useState<string>();
+  const [loading, setLoading] = useState(false);
+  const [selected, setSelected] = useState(0);
+  const [drafts, setDrafts] = useState<Record<number, LineDraft>>({});
+  const fileInput = useRef<HTMLInputElement>(null);
+
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    if (!file) return;
+    setLoading(true); setSystemError(undefined); setPreview(undefined); setDrafts({});
+    try {
+      const form = new FormData(); form.set('businessDate', businessDate); form.set('file', file);
+      const response = await fetch('/api/warehouse/work-orders/preview', { method: 'POST', body: form });
+      const payload = await response.json() as ApiResponse<WorkOrderBatchPreview>;
+      if (!payload.ok) throw new Error(`${payload.error.code} · ${payload.error.message}`);
+      setPreview(payload.data); setSelected(0);
+    } catch (error) { setSystemError(error instanceof Error ? error.message : '系统读取失败'); }
+    finally { setLoading(false); }
+  }
+
+  function updateDraft(index: number, patch: Partial<LineDraft>) {
+    setDrafts((current) => ({ ...current, [index]: { snText: '', location: '', locationConfirmed: false, ...current[index], ...patch } }));
+  }
+
+  const rows = preview?.lines ?? [];
+  const active = rows[selected]?.preview;
+  const activeDraft = drafts[selected] ?? { snText: '', location: '', locationConfirmed: false };
+  const completion = active ? evaluatePreparedCompletion({
+    expectedQty: active.proposedPreparedRow?.qty ?? active.extracted.qty ?? 0,
+    snText: activeDraft.snText,
+    confirmedLocation: activeDraft.location,
+    locationConfirmed: activeDraft.locationConfirmed,
+    pickupCode: active.pickupCode?.value,
+  }) : undefined;
+  const activeReady = Boolean(completion?.ready && active?.errors.length === 0);
+  const errorCount = preview?.errors.length ?? 0;
+  const matchedCount = rows.filter((item) => item.preview.proposedPreparedRow && item.preview.errors.length === 0).length;
+  const completedDrafts = rows.filter((item, index) => {
+    const draft = drafts[index] ?? { snText: '', location: '', locationConfirmed: false };
+    return item.preview.errors.length === 0 && evaluatePreparedCompletion({ expectedQty: item.preview.proposedPreparedRow?.qty ?? 0, snText: draft.snText, confirmedLocation: draft.location, locationConfirmed: draft.locationConfirmed, pickupCode: item.preview.pickupCode?.value }).ready;
+  }).length;
+  const fileName = file?.name ?? '尚未选择工单';
+  const searchLabel = useMemo(() => preview ? `${rows.length} 行 · ${completedDrafts} 行资料完整` : '等待导入工单', [preview, rows.length, completedDrafts]);
+
+  return <div className="operations-console">
+    <aside className="console-rail">
+      <ControlledActionPanel action={action} onActionChange={setAction} />
+      <form onSubmit={submit} className="import-panel">
+        <label>悉尼业务日<input type="date" value={businessDate} onChange={(event) => setBusinessDate(event.target.value)} required /></label>
+        <input ref={fileInput} className="sr-only" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" onChange={(event) => setFile(event.target.files?.[0])} />
+        <button className="file-picker" type="button" onClick={() => fileInput.current?.click()}><FileXls size={21} /><span>{fileName}</span></button>
+        <button className="outline-button" disabled={loading || !file} type="submit"><UploadSimple size={18} />{loading ? '解析工单与库存…' : '导入工单'}</button>
+      </form>
+      <Link className="secondary-workflow" href="/returns"><span><strong>批量退回返修</strong><small>只需输入 SN，默认 REPAIR-01</small></span><ArrowRight size={18} /></Link>
+    </aside>
+    <section className="console-main">
+      <div className="job-summary"><div><h3>{preview?.sh ?? '库存操作台 · 等待导入工单'}</h3><p>{fileName}</p></div><span>{preview ? '备货资料录入' : '未开始'}</span></div>
+      <div className="job-stats"><span>工单行 <b>{rows.length}</b></span><span>库存匹配 <b>{matchedCount}</b></span><span>资料完整 <b>{completedDrafts}</b></span><span>阻塞 <b>{errorCount}</b></span></div>
+      <div className="table-tools"><div><MagnifyingGlass size={17} />{searchLabel}</div><span>取件码：系统自动生成</span><span>库位：人工最终确认</span></div>
+      {systemError && <div className="inline-alert danger"><WarningCircle size={19} />{systemError}</div>}
+      {!preview && !systemError && <div className="console-empty"><UploadSimple size={36} /><strong>导入一份仓库工单</strong><span>系统读取 Replacement Information，匹配库存后进入 SN 与库位确认。</span></div>}
+      {preview && <div className="console-table-wrap"><table className="console-table"><thead><tr><th>行</th><th>SKU</th><th>机型</th><th>数量</th><th>自动取件码</th><th>建议库位</th><th>人工资料</th><th>状态</th></tr></thead><tbody>{rows.map((item, index) => {
+        const row = item.preview.proposedPreparedRow; const blocked = item.preview.errors.length > 0;
+        const draft = drafts[index] ?? { snText: '', location: '', locationConfirmed: false };
+        const ready = evaluatePreparedCompletion({ expectedQty: row?.qty ?? 0, snText: draft.snText, confirmedLocation: draft.location, locationConfirmed: draft.locationConfirmed, pickupCode: item.preview.pickupCode?.value }).ready;
+        return <tr className={selected === index ? 'selected' : ''} onClick={() => setSelected(index)} key={`${item.sourceRow ?? index}-${row?.sku ?? index}`}><td>{item.sourceRow ?? '—'}</td><td>{row?.sku ?? item.preview.extracted.replacementSku ?? '—'}</td><td>{row?.model ?? '—'}</td><td>{row?.qty ?? item.preview.extracted.qty ?? '—'}</td><td>{item.preview.pickupCode?.value ?? '—'}</td><td>{item.preview.recommendation?.location ?? '—'}</td><td>{ready ? 'SN + 库位已确认' : '等待人工填写'}</td><td><span className={`row-status ${blocked ? 'blocked' : ready ? 'ok' : 'pending'}`}>{blocked ? '阻塞' : ready ? '可完成' : '待确认'}</span></td></tr>;
+      })}</tbody></table></div>}
+      {preview?.warnings.map((warning) => <div className="inline-alert warning" key={warning}><WarningCircle size={18} />{warning}</div>)}
+    </section>
+    <aside className="detail-panel prepared-detail"><h3>备货确认</h3>{!active ? <div className="detail-empty">选择一行，人工填写 SN 和最终库位。</div> : <>
+      <dl><dt>SKU</dt><dd>{active.proposedPreparedRow?.sku ?? active.extracted.replacementSku ?? '—'}</dd><dt>数量</dt><dd>{active.proposedPreparedRow?.qty ?? active.extracted.qty ?? '—'}</dd><dt>自动取件码</dt><dd className="pickup-code">{active.pickupCode?.value ?? '未生成'}</dd><dt>系统建议库位</dt><dd>{active.recommendation?.location ?? '无可用库位'}</dd></dl>
+      <div className="detail-section completion-fields"><label>机器 SN（每台一行）<textarea value={activeDraft.snText} onChange={(event) => updateDraft(selected, { snText: event.target.value })} placeholder={`需要填写 ${active.proposedPreparedRow?.qty ?? active.extracted.qty ?? 0} 个 SN`} /></label><label>最终来源库位<input value={activeDraft.location} onChange={(event) => updateDraft(selected, { location: event.target.value, locationConfirmed: false })} placeholder={active.recommendation?.location ?? '例如 R1-2-3-L'} /></label>{active.recommendation && <button type="button" className="use-recommendation" onClick={() => updateDraft(selected, { location: active.recommendation!.location, locationConfirmed: false })}><MapPin size={16} />填入建议库位 {active.recommendation.location}</button>}<label className="confirm-location"><input type="checkbox" checked={activeDraft.locationConfirmed} onChange={(event) => updateDraft(selected, { locationConfirmed: event.target.checked })} /><span>我已在现场核对并确认这个库位</span></label></div>
+      <div className="completion-checklist"><h4>完成条件</h4>{completion?.blockers.length === 0 ? <p className="ready-text"><CheckCircle size={17} />SN、取件码和库位资料完整</p> : completion?.blockers.map((blocker) => <p key={blocker}>{blocker}</p>)}</div>
+      {active.errors.length > 0 && <div className="detail-section"><h4>库存阻塞</h4>{active.errors.map((error) => <p className="danger-text" key={error.code}>{error.code} · {error.message}</p>)}</div>}
+    </>}<button className={`locked-action ${activeReady ? 'ready' : ''}`} disabled><LockSimple size={18} />{activeReady ? '资料完整 · UAT 写入锁定' : active?.errors.length ? '库存校验仍阻塞' : '填写 SN 并确认库位'}</button></aside>
+  </div>;
 }

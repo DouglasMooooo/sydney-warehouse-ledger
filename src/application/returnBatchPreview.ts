@@ -1,4 +1,5 @@
 import { parseBusinessDateString } from '../ledger/businessDate.js';
+import { normalizeSN } from '../ledger/normalize.js';
 import { validateLedgerInput, type ValidationError } from '../ledger/validators.js';
 import type { ParsedReturnBatch } from '../workOrders/returnXlsxParser.js';
 
@@ -57,4 +58,28 @@ export function prepareReturnBatchPreview(parsed: ParsedReturnBatch, businessDat
     };
   });
   return preview;
+}
+
+export function prepareReturnSnBatchPreview(snInput: unknown, businessDateInput: string): ReturnBatchPreview {
+  if (typeof snInput === 'string' && snInput.length > 50_000) throw new TypeError('SN 批次内容过长。');
+  const values = Array.isArray(snInput)
+    ? snInput
+    : typeof snInput === 'string' ? snInput.split(/[\r\n,，;；]+/) : [];
+  if (values.length > 500) throw new TypeError('单次最多处理 500 个 SN。');
+  const warnings: string[] = [];
+  const seen = new Set<string>();
+  const lines: ParsedReturnBatch['lines'] = [];
+  for (const value of values) {
+    const sn = normalizeSN(value);
+    if (!sn) continue;
+    if (sn.length > 100) throw new TypeError('SN 长度不能超过 100 个字符。');
+    if (seen.has(sn)) {
+      warnings.push(`DUPLICATE_SN_SKIPPED:${sn}`);
+      continue;
+    }
+    seen.add(sn);
+    lines.push({ sn, qty: 1 });
+  }
+  if (lines.length === 0) throw new TypeError('至少输入一个 SN。');
+  return prepareReturnBatchPreview({ lines, confidence: 'high', warnings }, businessDateInput);
 }

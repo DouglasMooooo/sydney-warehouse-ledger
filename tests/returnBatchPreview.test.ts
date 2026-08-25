@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { prepareReturnBatchPreview, RETURN_REPAIR_LOCATION } from '../src/application/returnBatchPreview.js';
+import { prepareReturnBatchPreview, prepareReturnSnBatchPreview, RETURN_REPAIR_LOCATION } from '../src/application/returnBatchPreview.js';
 import { parseReturnXlsxWorkbookData } from '../src/workOrders/returnXlsxParser.js';
 
 test('live RMA Faulty Unit rows become a REPAIR-01 read-only batch preview', () => {
@@ -30,4 +30,15 @@ test('return batch fails closed when Faulty header or serialized quantity is inv
   ] }] });
   assert.equal(parsed.confidence, 'needs_confirmation');
   assert.deepEqual(prepareReturnBatchPreview(parsed, '2026-08-25').lines, []);
+});
+
+test('SN-only return intake trims, deduplicates, and defaults every unit to REPAIR-01', () => {
+  const preview = prepareReturnSnBatchPreview(' SN-1\nSN-2\nSN-1 ', '2026-08-25');
+  assert.deepEqual(preview.lines.map((line) => ({ sn: line.sn, qty: line.qty, location: line.targetLocation, condition: line.stockCondition })), [
+    { sn: 'SN-1', qty: 1, location: 'REPAIR-01', condition: '待修' },
+    { sn: 'SN-2', qty: 1, location: 'REPAIR-01', condition: '待修' },
+  ]);
+  assert.deepEqual(preview.warnings, ['DUPLICATE_SN_SKIPPED:SN-1']);
+  assert.throws(() => prepareReturnSnBatchPreview('  ', '2026-08-25'), /至少输入一个 SN/);
+  assert.throws(() => prepareReturnSnBatchPreview(Array.from({ length: 501 }, (_, index) => `SN-${index}`), '2026-08-25'), /最多处理 500/);
 });

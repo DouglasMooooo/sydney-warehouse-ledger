@@ -10,7 +10,7 @@ export default async function WorkOrdersPage() {
   return (
     <>
       <header className="console-header">
-        <div><h2>更换件信息提取 <small>仅 Replacement Information</small></h2><p>导入真实 RMA 工单，核对当前飞书库存与推荐库位。</p></div>
+        <div><h2>库存操作台 <small>工单备货</small></h2><p>导入工单后自动生成取件码；仓库人员填写 SN，并现场确认最终库位。</p></div>
         <div className="readonly-lock">UAT 环境 · 所有写入已锁定</div>
       </header>
       <WorkOrderPreviewClient initialBusinessDate={todayInSydney()} />
