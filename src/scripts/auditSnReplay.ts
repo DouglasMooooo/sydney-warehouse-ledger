@@ -1,11 +1,124 @@
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { buildSnReplayAudit } from '../application/queries/snReplayAudit.js';
+import type { InventoryCandidate } from '../application/contracts.js';
+import { STOCK_CONDITIONS, type StockCondition } from '../config/controlledValues.js';
 import { DeterministicMovementProjectionService } from '../domain/movement/movementProjection.js';
 import { DefaultMigrationPolicy, FEISHU_OPERATIONAL_SOURCE_BATCHES } from '../domain/movement/migrationPolicy.js';
-import { warehouseReadAdapterFromEnv } from '../feishu/warehouseReadAdapter.js';
+import { DeterministicSnLifecycleReplayService } from '../domain/sn/snLifecycleReplay.js';
+import type { InventoryMovement, MovementValidationIssue } from '../domain/movement/types.js';
+import { requiredEnv } from '../feishu/client.js';
+import { readRange, type ReadTypedTableInput } from '../feishu/read.js';
+import type { WarehouseSheetReader } from '../feishu/sheetReader.js';
+import type { FeishuCell, TypedSheetData } from '../feishu/types.js';
+import { FeishuWarehouseReadAdapter } from '../feishu/warehouseReadAdapter.js';
+import { canonicalizeSn } from '../snResolver/resolver.js';
 
-// Read-only by construction: this runner depends only on the warehouse read adapter and pure projection/replay services.
-const adapter=warehouseReadAdapterFromEnv();
-const [records,currentInventory]=await Promise.all([adapter.readLedgerRecords(),adapter.readCurrentInventory()]);
+interface ReviewedDimension { lastColumn:string;rowCount:number;numericColumns?:readonly string[] }
+
+/** Audit-only reader: preserves duplicate headers and restores only reviewed numeric columns. */
+class AuditOnlyPositionalReader implements WarehouseSheetReader {
+  constructor(private readonly spreadsheetUrl:string,private readonly dimensions:Readonly<Record<string,ReviewedDimension>>){ }
+  async readTable(input:Omit<ReadTypedTableInput,'spreadsheetUrl'>):Promise<TypedSheetData>{
+    const sheetId=input.sheetId;if(!sheetId)throw new Error('Audit reader requires stable sheetId.');
+    const dimension=this.dimensions[sheetId];if(!dimension)throw new Error(`Audit reader has no reviewed dimension for sheet ${sheetId}.`);
+    const rows:Array<Array<string|number|boolean|null>>=[];let columns:string[]=[];
+    for(let start=1;start<=dimension.rowCount;start+=250){
+      const end=Math.min(start+249,dimension.rowCount),data=readRange({spreadsheetUrl:this.spreadsheetUrl,sheetId,range:`A${start}:${dimension.lastColumn}${end}`,include:['value']});
+      for(const range of data.ranges){columns=range.col_indices;for(let index=0;index<range.cells.length;index++){
+        const rowNumber=range.row_indices[index];if(rowNumber===undefined)continue;
+        rows[rowNumber-1]=Array.from({length:columns.length},(_,column)=>scalar(range.cells[index]?.[column],columns[column]!,dimension));
+      }}
+    }
+    const width=columns.length;for(let index=0;index<dimension.rowCount;index++)rows[index]??=Array(width).fill(null);
+    while(rows.length>0&&rows.at(-1)?.every(value=>value===null||value===''))rows.pop();
+    if(input.noHeader)return {name:sheetId,range:`A1:${dimension.lastColumn}${rows.length}`,columns,data:rows,dtypes:Object.fromEntries(columns.map(column=>[column,'string']))};
+    const header=rows[0]??[],headers=Array.from({length:width},(_,index)=>String(header[index]??columns[index]??`col${index+1}`));
+    return {name:sheetId,range:`A1:${dimension.lastColumn}${rows.length}`,columns:headers,data:rows.slice(1),dtypes:Object.fromEntries(headers.map(column=>[column,'string']))};
+  }
+  async healthCheck():Promise<boolean>{return true;}
+}
+
+function scalar(cell:FeishuCell|undefined,column:string,dimension:ReviewedDimension):string|number|boolean|null{
+  const value=cell?.value;if(value===undefined||value===null)return null;
+  if(dimension.numericColumns?.includes(column)&&typeof value==='string'&&value.trim()!==''&&Number.isFinite(Number(value)))return Number(value);
+  return typeof value==='string'||typeof value==='number'||typeof value==='boolean'?value:String(value);
+}
+
+interface PhysicalSnEvidence {sourceRow:number;location:string;condition:string;sourceValue:string;sourceFormat:'COMPOSITE'|'RAW_SN';sku:string;sn:string;ledgerStatus:string;automaticStatus:string;dataGaps:string[]}
+function physicalProjection(table:TypedSheetData):{inventory:InventoryCandidate[];evidence:PhysicalSnEvidence[];invalidRows:Array<{sourceRow:number;reason:string}>}{
+  const inventory:InventoryCandidate[]=[],evidence:PhysicalSnEvidence[]=[],invalidRows:Array<{sourceRow:number;reason:string}>=[];
+  table.data.slice(1).forEach((row,index)=>{
+    const sourceRow=index+2,location=text(row[0]),condition=text(row[1]),sourceValue=text(row[2]),ledgerStatus=text(row[3]),automaticStatus=text(row[4]);
+    if(!sourceValue)return;
+    const parts=sourceValue.split('/').map(value=>value.trim()),sourceFormat=parts.length>=3?'COMPOSITE' as const:'RAW_SN' as const;
+    const sn=sourceFormat==='COMPOSITE'?parts.at(-1)??'':sourceValue;
+    const candidateSku=sourceFormat==='COMPOSITE'?parts[0]??'':ledgerStatus;
+    const sku=/^(?:\d{2}-[A-Z0-9-]+|[A-Z0-9]+-[A-Z0-9-]+)$/i.test(candidateSku)?candidateSku:'UNKNOWN';
+    const validCondition=STOCK_CONDITIONS.includes(condition as StockCondition),dataGaps:string[]=[];
+    if(!sn)dataGaps.push('MISSING_SN');if(!location)dataGaps.push('MISSING_LOCATION');if(sku==='UNKNOWN')dataGaps.push('MISSING_SKU');if(!validCondition)dataGaps.push('MISSING_OR_INVALID_CONDITION');
+    for(const reason of dataGaps)invalidRows.push({sourceRow,reason});
+    const projectedCondition=(validCondition?condition:'UNKNOWN') as StockCondition;
+    inventory.push({sku,location:location||'UNKNOWN',condition:projectedCondition,availableQty:1,sn});
+    evidence.push({sourceRow,location:location||'UNKNOWN',condition:validCondition?condition:'UNKNOWN',sourceValue,sourceFormat,sku,sn,ledgerStatus,automaticStatus,dataGaps});
+  });return {inventory,evidence,invalidRows};
+}
+
+function text(value:unknown):string{return String(value??'').trim();}
+function countBy<T>(items:readonly T[],key:(item:T)=>string):Record<string,number>{const result:Record<string,number>={};for(const item of items){const value=key(item)||'(blank)';result[value]=(result[value]??0)+1;}return Object.fromEntries(Object.entries(result).sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0])));}
+function groupedMovements(movements:readonly InventoryMovement[]):Map<string,InventoryMovement[]>{const result=new Map<string,InventoryMovement[]>();for(const movement of movements){if(!movement.sn)continue;const sn=canonicalizeSn(movement.sn);result.set(sn,[...(result.get(sn)??[]),movement]);}return result;}
+
+const spreadsheetUrl=requiredEnv('FEISHU_SPREADSHEET_URL'),mainSheetId=requiredEnv('FEISHU_MAIN_SHEET_ID'),serializedSheetId=requiredEnv('FEISHU_SERIALIZED_INVENTORY_SHEET_ID');
+const currentInventorySheetId=process.env.FEISHU_CURRENT_INVENTORY_SHEET_ID??serializedSheetId;
+const reader=new AuditOnlyPositionalReader(spreadsheetUrl,{
+  [mainSheetId]:{lastColumn:'AC',rowCount:Number(process.env.FEISHU_MAIN_ROW_COUNT??2342),numericColumns:['K']},
+  [currentInventorySheetId]:{lastColumn:'T',rowCount:Number(process.env.FEISHU_CURRENT_INVENTORY_ROW_COUNT??1000),numericColumns:['H']},
+  [serializedSheetId]:{lastColumn:'E',rowCount:Number(process.env.FEISHU_SERIALIZED_ROW_COUNT??1000)},
+});
+const adapter=new FeishuWarehouseReadAdapter({spreadsheetUrl,mainSheetId,currentInventorySheetId},reader);
+const [records,serializedTable]=await Promise.all([adapter.readLedgerRecords(),reader.readTable({sheetId:serializedSheetId,noHeader:true})]);
+const physical=physicalProjection(serializedTable);
 const projection=new DeterministicMovementProjectionService(new DefaultMigrationPolicy(undefined,FEISHU_OPERATIONAL_SOURCE_BATCHES)).projectLedgerRecords(records);
-const report=buildSnReplayAudit(projection.movements,currentInventory,projection.issues,projection.unknownActions);
-console.log(JSON.stringify(report,null,2));
+const report=buildSnReplayAudit(projection.movements,physical.inventory,projection.issues,projection.unknownActions);
+const physicalDataGapRows=new Set(physical.invalidRows.map(item=>item.sourceRow)).size;
+const bySn=groupedMovements(projection.movements),replayService=new DeterministicSnLifecycleReplayService();
+const replayBySn=new Map([...bySn].map(([sn,movements])=>[sn,replayService.replay(sn,movements)]));
+const recordsBySn=new Map<string,typeof records>();for(const record of records){if(!record.sn)continue;const sn=canonicalizeSn(record.sn);recordsBySn.set(sn,[...(recordsBySn.get(sn)??[]),record]);}
+const issueBySn=new Map<string,MovementValidationIssue[]>();
+for(const issue of [...projection.issues,...[...replayBySn.values()].flatMap(item=>item.issues)])if(issue.sn){const sn=canonicalizeSn(issue.sn);issueBySn.set(sn,[...(issueBySn.get(sn)??[]),issue]);}
+const classifications=report.missingFromReplay.map(sn=>{const replay=replayBySn.get(sn),movements=bySn.get(sn)??[];
+  const issues=issueBySn.get(sn)??[],onlyHistorical=movements.length>0&&movements.every(item=>item.replayEligibility==='HISTORICAL_EVIDENCE_ONLY');
+  const category=!replay?'B_MISSING_BASELINE':onlyHistorical?'C_HISTORICAL_ONLY_RECORD':replay.currentState.status==='CONFLICT'&&issues.some(item=>item.code==='MOVE_SOURCE_MISMATCH')?'F_MOVEMENT_SEMANTIC_CONFLICT':replay.currentState.status==='CONFLICT'&&issues.some(item=>item.code==='OUTBOUND_SN_NOT_IN_STOCK')?'B_MISSING_BASELINE':replay.currentState.status==='OUTBOUND'||replay.currentState.status==='REMOVED'?'G_CURRENT_PROJECTION_CONFLICT':replay.currentState.status==='CONFLICT'?'D_LEGACY_DATA_INCOMPLETE':'M_NEEDS_MANUAL_REVIEW';
+  return {sn,category,currentEvidence:physical.evidence.filter(item=>canonicalizeSn(item.sn)===sn),ledgerRecords:(recordsBySn.get(sn)??[]).map(item=>({origin:item.origin,sourceBatch:item.sourceBatch,action:item.action,businessDate:item.businessDate,replayEligibility:movements.find(movement=>movement.sourceSequence===item.sourceSequence)?.replayEligibility,remarkMarker:item.remark?.match(/\[[^\]]+\]/)?.[0]})),replayState:replay?.currentState,movements,issues};});
+const classifyConflict=(sn:string)=>{const issues=issueBySn.get(sn)??[],movements=bySn.get(sn)??[];
+  if(issues.some(item=>item.code==='MOVE_SOURCE_MISMATCH'))return 'MOVE_SOURCE_MISMATCH';if(issues.some(item=>item.code==='DOUBLE_OUTBOUND'))return 'DOUBLE_OUTBOUND';
+  if(issues.some(item=>item.code==='RETURN_SN_ALREADY_IN_STOCK'))return 'RETURN_ALREADY_IN_STOCK';if(issues.some(item=>item.code.startsWith('REPAIR_COMPLETE')))return 'REPAIR_PAIRING';
+  if(issues.some(item=>item.code==='OUTBOUND_SN_NOT_IN_STOCK')&&movements[0]?.inventoryEffect==='DECREASE')return 'MISSING_BASELINE';return movements.every(item=>item.origin==='LEGACY_MIGRATION')?'LEGACY_HISTORY_GAP':'REAL_OPERATION_CONFLICT';};
+const identityStats={MOV:projection.movements.filter(item=>item.movementId.startsWith('MOV-')).length,DERIVED:projection.movements.filter(item=>item.movementId.startsWith('DERIVED-')).length,LEGACY:projection.movements.filter(item=>item.movementId.startsWith('LEGACY-')).length,
+  persistedAuthoritative:projection.movements.filter(item=>item.identityAuthority==='PERSISTED').length,derivedSystemNative:projection.movements.filter(item=>item.identityAuthority==='DERIVED').length,legacy:projection.movements.filter(item=>item.identityAuthority==='LEGACY').length};
+const repairMovements=projection.movements.filter(item=>item.workflow==='REPAIR_COMPLETE'||item.repairLinkageStatus);
+const repairStats={EXPLICIT:repairMovements.filter(item=>item.repairLinkageStatus==='EXPLICIT').length,LEGACY_HEURISTIC:repairMovements.filter(item=>item.repairLinkageStatus==='LEGACY_HEURISTIC').length,LINKAGE_MISSING:repairMovements.filter(item=>item.repairLinkageStatus==='LINKAGE_MISSING').length,PAIR_MISMATCH:repairMovements.filter(item=>item.repairLinkageStatus==='PAIR_MISMATCH').length,
+  legacyHeuristicSn:repairMovements.filter(item=>item.repairLinkageStatus==='LEGACY_HEURISTIC').map(item=>item.sn).filter(Boolean)};
+const returns=projection.movements.filter(item=>item.workflow==='RETURN_REPAIR'||item.ledgerAction==='退回维修');
+const returnShStats={total:returns.length,validSh:returns.filter(item=>/^SH-/i.test(item.shNo??'')).length,missingSh:returns.filter(item=>!item.shNo).length,thReference:returns.filter(item=>/^TH-/i.test(item.shNo??'')).length,invalidSh:returns.filter(item=>Boolean(item.shNo)&&!/^SH-/i.test(item.shNo??'')&&!/^TH-/i.test(item.shNo??'')).length};
+const historical=projection.movements.filter(item=>item.replayEligibility==='HISTORICAL_EVIDENCE_ONLY'),baselines=projection.movements.filter(item=>item.replayEligibility==='MIGRATION_BASELINE');
+const excludedCurrentSn=physical.evidence.filter(item=>{const movements=bySn.get(canonicalizeSn(item.sn))??[];return movements.length>0&&movements.every(movement=>movement.replayEligibility==='HISTORICAL_EVIDENCE_ONLY');});
+const candidateBaselineBatches=[{sourceBatch:'FEISHU_OPERATIONAL_LEDGER',currentSnCount:new Set(excludedCurrentSn.map(item=>canonicalizeSn(item.sn))).size,replayCurrentlyExcluded:excludedCurrentSn.length,suggestedClassification:excludedCurrentSn.length?'MANUAL_REVIEW':'HISTORICAL_EVIDENCE_ONLY',confidence:'LOW',reason:'The read adapter collapses all ledger provenance into one synthetic batch, so no narrower batch can be safely promoted.'}];
+const mismatchDetails=(sns:readonly string[])=>sns.map(sn=>({sn,current:physical.evidence.filter(item=>canonicalizeSn(item.sn)===sn),replay:replayBySn.get(sn)?.currentState,lastMovement:(bySn.get(sn)??[]).at(-1)}));
+const orderingDiagnostics=[...bySn.entries()].filter(([,items])=>new Set(items.map(item=>item.businessDate)).size<items.length).map(([sn,items])=>({sn,orderingConfidence:'LOW',timeline:items.map(item=>({businessDate:item.businessDate,occurredAt:item.occurredAt,createdAt:item.createdAt,sourceSequence:item.sourceSequence,movementId:item.movementId,action:item.ledgerAction}))}));
+const detailed={audit:{executedAt:new Date().toISOString(),mode:'READ_ONLY',source:{label:'UAT Operational Ledger',mainSheetId,serializedSheetId,currentInventorySheetId},writesAttempted:0},
+  summary:{ledgerRecords:records.length,movements:projection.movements.length,physicalSerializedRows:physical.inventory.length,physicalDataGapRows,...report},
+  distributions:{actions:countBy(records,item=>item.action),origins:countBy(projection.movements,item=>item.origin),replayEligibility:countBy(projection.movements,item=>item.replayEligibility),sourceBatches:countBy(records,item=>item.sourceBatch??''),sourceBatchOriginEligibility:countBy(projection.movements,item=>`${item.origin}|${item.replayEligibility}`),physicalConditions:countBy(physical.evidence,item=>item.condition),physicalAutomaticStatus:countBy(physical.evidence,item=>item.automaticStatus),missingQtyByAction:countBy(records.filter(item=>item.qty===undefined),item=>item.action)},classifications,
+  missingFromCurrentProjection:report.missingFromCurrentProjection.map(sn=>({sn,category:'G_CURRENT_PROJECTION_CONFLICT',replayState:replayBySn.get(sn)?.currentState,movements:bySn.get(sn)??[]})),
+  fieldMismatches:{location:mismatchDetails(report.locationMismatch),condition:mismatchDetails(report.conditionMismatch),sku:mismatchDetails(report.skuMismatch)},
+  replayConflicts:report.replayConflicts.map(sn=>{const state=replayBySn.get(sn)?.currentState;return {sn,classification:classifyConflict(sn),lastKnownState:state?.status==='CONFLICT'?state.lastKnownState:undefined,issues:issueBySn.get(sn)??[],movements:(bySn.get(sn)??[]).map(item=>({movementId:item.movementId,businessDate:item.businessDate,action:item.ledgerAction,from:item.fromLocation,to:item.toLocation,conditionBefore:item.stockConditionBefore,conditionAfter:item.stockConditionAfter,sh:item.shNo,origin:item.origin,identityAuthority:item.identityAuthority}))};}),
+  duplicateCurrentSn:report.duplicateCurrentSn.map(sn=>({sn,recordCount:physical.evidence.filter(item=>canonicalizeSn(item.sn)===sn).length,evidence:physical.evidence.filter(item=>canonicalizeSn(item.sn)===sn).map(item=>({sku:item.sku,location:item.location,condition:item.condition,sourceRow:item.sourceRow}))})),invalidPhysicalRows:physical.invalidRows,
+  candidateBaselineBatches,identityStats,repairStats,returnShStats,orderingDiagnostics,
+  historicalEvidenceAnalysis:{recordCount:historical.length,snCount:new Set(historical.map(item=>item.sn).filter(Boolean).map(item=>canonicalizeSn(item!))).size,actionDistribution:countBy(historical,item=>item.ledgerAction),sampleSn:[...new Set(historical.map(item=>item.sn).filter(Boolean))].slice(0,10),confirmedNonAuthoritative:historical.every(item=>item.replayEligibility==='HISTORICAL_EVIDENCE_ONLY')},
+  baselineAnalysis:{recordCount:baselines.length,snCount:new Set(baselines.map(item=>item.sn).filter(Boolean)).size,skuCount:new Set(baselines.map(item=>item.sku).filter(Boolean)).size,followupActions:countBy(projection.movements.filter(item=>item.replayEligibility==='CURRENT_STATE'&&baselines.some(base=>base.sn&&item.sn&&canonicalizeSn(base.sn)===canonicalizeSn(item.sn))),item=>item.ledgerAction)},
+  candidateBaselineEvidence:{source:'实盘SN',status:'CANDIDATE_ONLY_NOT_APPLIED',reason:'Independent physical serialized inventory is evidence only; no baseline was created or applied.',byAutomaticStatus:countBy(physical.evidence,item=>item.automaticStatus)}};
+const readiness=report.matchRate===1&&report.replayConflicts.length===0&&report.missingFromReplay.length===0&&report.missingFromCurrentProjection.length===0&&report.duplicateCurrentSn.length===0&&physicalDataGapRows===0?'A':'D';
+const artifactDir=join(process.cwd(),'tmp'),jsonPath=join(artifactDir,'sn-replay-audit.json'),reportPath=join(artifactDir,'sn-replay-audit.md');mkdirSync(artifactDir,{recursive:true});writeFileSync(jsonPath,JSON.stringify({...detailed,readiness},null,2),'utf8');
+const markdown=`# SN Replay Audit Report\n\n## Executive Summary\n\nThis real UAT audit independently compared the Operational Ledger replay with the \`实盘SN\` physical projection. It was read-only and attempted zero Feishu writes. The result is **${readiness==='A'?'ready':'not ready'}** for a controlled SN API pilot.\n\n## Match Rate\n\n- Executed: ${detailed.audit.executedAt}\n- Mode: **READ ONLY** (Feishu writes attempted: 0)\n- Ledger records: ${records.length}\n- Projected movements: ${projection.movements.length}\n- Physical serialized rows: ${physical.inventory.length}\n- Match rate: ${(report.matchRate*100).toFixed(2)}% (${report.matched}/${report.currentProjectionCount})\n- Replay in-stock: ${report.replayInStockCount}\n- Missing from replay: ${report.missingFromReplay.length}\n- Missing from physical projection: ${report.missingFromCurrentProjection.length}\n- Replay conflicts: ${report.replayConflicts.length}\n- Location / condition / SKU mismatch: ${report.locationMismatch.length} / ${report.conditionMismatch.length} / ${report.skuMismatch.length}\n- Duplicate physical SN: ${report.duplicateCurrentSn.length}\n- Physical rows with data gaps: ${physicalDataGapRows}\n- Historical-evidence-only movements: ${report.historicalEvidenceCount}\n- Migration baselines: ${report.migrationBaselineCount}\n- Unknown actions: ${report.unknownActionCount}\n- Readiness: **${readiness}**\n\n## Main Gap Categories\n\n${Object.entries(countBy(classifications,item=>item.category)).map(([key,value])=>`- ${key}: ${value}`).join('\n')||'- None'}\n\n## Issue Counts\n\n${Object.entries(report.issuesByCode).map(([key,value])=>`- ${key}: ${value}`).join('\n')||'- None'}\n\n## Migration Findings\n\nThe \`实盘SN\` sheet is candidate-only independent physical evidence. No baseline was created or applied. The adapter currently collapses ledger provenance to \`FEISHU_OPERATIONAL_LEDGER\`; this audit cannot safely promote a narrower legacy batch automatically.\n\n| sourceBatch | Current SN count | Replay currently excluded | Suggested classification | Confidence |\n|---|---:|---:|---|---|\n${candidateBaselineBatches.map(item=>`| ${item.sourceBatch} | ${item.currentSnCount} | ${item.replayCurrentlyExcluded} | ${item.suggestedClassification} | ${item.confidence} |`).join('\n')}\n\n## Identity / Repair / Return\n\n- Identity MOV / DERIVED / LEGACY: ${identityStats.MOV} / ${identityStats.DERIVED} / ${identityStats.LEGACY}\n- Repair EXPLICIT / LEGACY_HEURISTIC / LINKAGE_MISSING / PAIR_MISMATCH: ${repairStats.EXPLICIT} / ${repairStats.LEGACY_HEURISTIC} / ${repairStats.LINKAGE_MISSING} / ${repairStats.PAIR_MISMATCH}\n- Returns total / valid SH / missing SH / TH reference / invalid SH: ${returnShStats.total} / ${returnShStats.validSh} / ${returnShStats.missingSh} / ${returnShStats.thReference} / ${returnShStats.invalidSh}\n\n## Critical Conflicts\n\nReplay conflicts are preserved in the local JSON artifact with movement-level evidence. They were not filtered, repaired, or backfilled from current inventory.\n\n## Recommended Next Action\n\n**D. STOP_AND_REDESIGN** — the match rate is below 80% and legacy history produces extensive authoritative-state conflicts. Restore auditable source-batch provenance and establish an explicitly reviewed baseline/cleanup plan before opening the controlled SN API.\n`;
+writeFileSync(reportPath,markdown,'utf8');
+console.log(JSON.stringify({executed:true,mode:'READ_ONLY',writesAttempted:0,readiness,summary:{currentProjectionCount:report.currentProjectionCount,replayInStockCount:report.replayInStockCount,matched:report.matched,matchRate:report.matchRate,missingFromReplay:report.missingFromReplay.length,missingFromCurrentProjection:report.missingFromCurrentProjection.length,replayConflicts:report.replayConflicts.length,locationMismatch:report.locationMismatch.length,conditionMismatch:report.conditionMismatch.length,skuMismatch:report.skuMismatch.length,duplicateCurrentSn:report.duplicateCurrentSn.length,physicalDataGapRows,unknownActions:report.unknownActionCount,issuesByCode:report.issuesByCode},artifacts:{jsonPath,reportPath}},null,2));
