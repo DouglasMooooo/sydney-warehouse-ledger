@@ -36,13 +36,15 @@ test('login, unauthorized, and logout UX are explicit and privacy-safe', () => {
   assert(logout.includes("Cache-Control', 'no-store"));
 });
 
-test('READ_ONLY_UAT registers only the two explicitly allowed warehouse POST routes', () => {
+test('READ_ONLY_UAT registers only explicitly allowed read-only warehouse POST routes', () => {
   assert.doesNotThrow(() => assertReadOnlyRelease({ READ_ONLY_RELEASE: 'true' }));
   assert.throws(() => assertReadOnlyRelease({}), /READ_ONLY_RELEASE=true/);
   const routeFiles = allFiles('app/api/warehouse').filter((path) => path.endsWith('/route.ts'));
   const postRoutes = routeFiles.filter((path) => /export\s+async\s+function\s+POST\s*\(/.test(readFileSync(path, 'utf8')));
   assert.deepEqual(postRoutes.sort(), [
+    'app/api/warehouse/ai/query/route.ts',
     'app/api/warehouse/exceptions/deep-scan/route.ts',
+    'app/api/warehouse/returns/preview/route.ts',
     'app/api/warehouse/work-orders/preview/route.ts',
   ]);
   for (const forbidden of ['confirm', 'adjustment', 'reservation', 'finalize']) assert(!routeFiles.some((path) => path.toLowerCase().includes(forbidden)));

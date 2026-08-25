@@ -9,9 +9,9 @@ export default async function WorkOrdersPage() {
   catch { return <div className="notice error">当前账号未获得仓库系统权限</div>; }
   return (
     <>
-      <header className="page-header">
-        <div><p className="eyebrow">PREPARED · XLSX</p><h2>Work Order Preview</h2><p>服务端解析真实 ERP XLSX，并用当前飞书库存生成零写入预览。</p></div>
-        <div className="preview-badge">Preview only · Zero writes</div>
+      <header className="console-header">
+        <div><h2>更换件信息提取 <small>仅 Replacement Information</small></h2><p>导入真实 RMA 工单，核对当前飞书库存与推荐库位。</p></div>
+        <div className="readonly-lock">UAT 环境 · 所有写入已锁定</div>
       </header>
       <WorkOrderPreviewClient initialBusinessDate={todayInSydney()} />
     </>

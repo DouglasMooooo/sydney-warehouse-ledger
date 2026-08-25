@@ -97,6 +97,24 @@ test('XLSX worksheet adapter core finds literal section and multiple source rows
   assert.deepEqual(parsed.replacementLines.map((line) => [line.sku, line.sourceRow]), [['GOOD-1', 7], ['GOOD-2', 8]]);
 });
 
+test('XLSX parser accepts the live Australian RMA Replacement headers', () => {
+  const parsed = parseXlsxWorkbookData({ sheets: [{ name: 'Sheet1', rows: [
+    ['* SH Ticket No.(ZOHO):', 'SH-2608-00184741'],
+    ['Faulty Unit Information'],
+    ['*Type of Product:', '*Model Name:', '*Product SN:', '#1Part No. /料号'],
+    ['Battery', 'EQ4800-S', 'FAULTY-SN-MUST-NOT-LEAK', 'FAULTY-SKU-MUST-NOT-LEAK'],
+    ['Replacement Unit information'],
+    ['*Type of Product:', '*Model Name:', '#1Part No. /料号', '*Qty:', '#1 Note（Stock of warehouse ）'],
+    ['Battery', 'EQ4800-S', '97-223-00065-00', 1, '悉尼良品仓'],
+    ['Other Information:'],
+  ] }] }, 'SH-2608-00184741-AU-换机.xlsx');
+  assert.equal(parsed.confidence, 'high');
+  assert.equal(parsed.shNo, 'SH-2608-00184741');
+  assert.deepEqual(parsed.replacementLines, [{
+    sku: '97-223-00065-00', qty: 1, erpWarehouse: '悉尼良品仓', sourceRow: 7,
+  }]);
+});
+
 test('XLSX parser uses shared headings and stops before Faulty rows', () => {
   const parsed = parseXlsxWorkbookData({ sheets: [{ name: 'ERP', rows: [
     ['Replacement Unit information：'],

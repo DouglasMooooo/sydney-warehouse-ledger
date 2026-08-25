@@ -3,10 +3,13 @@ import type { NextConfig } from 'next';
 const nextConfig: NextConfig = {
   agentRules: false,
   async headers() {
+    const scriptSrc = process.env.NODE_ENV === 'development'
+      ? "script-src 'self' 'unsafe-inline' 'unsafe-eval'"
+      : "script-src 'self' 'unsafe-inline'";
     const csp = [
       "default-src 'self'", "base-uri 'self'", "object-src 'none'", "form-action 'self'",
       "frame-ancestors 'self' https://*.feishu.cn https://*.larksuite.com",
-      "script-src 'self' 'unsafe-inline'", "style-src 'self' 'unsafe-inline'",
+      scriptSrc, "style-src 'self' 'unsafe-inline'",
       "img-src 'self' data:", "font-src 'self' data:", "connect-src 'self'",
     ].join('; ');
     return [{

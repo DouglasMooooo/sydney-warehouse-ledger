@@ -78,10 +78,10 @@ export function parseXlsxWorkbookData(workbook: XlsxWorkbookData, sourceFileName
 }
 
 function headerIndexes(row: unknown[]): { sku: number; qty: number; erpWarehouse: number } | undefined {
-  const normalized = row.map((cell) => text(cell).toLowerCase().replace(/\s+/g, ' '));
-  const sku = normalized.findIndex((cell) => cell === 'sku' || cell === 'replacement sku');
+  const normalized = row.map(normalizeFieldHeader);
+  const sku = normalized.findIndex((cell) => cell === 'sku' || cell === 'replacementsku' || cell.includes('partno') || cell.includes('料号'));
   const qty = normalized.findIndex((cell) => cell === 'qty' || cell === 'quantity');
-  const erpWarehouse = normalized.findIndex((cell) => cell === 'erp warehouse');
+  const erpWarehouse = normalized.findIndex((cell) => cell === 'erpwarehouse' || cell.includes('stockofwarehouse'));
   return sku >= 0 && qty >= 0 && erpWarehouse >= 0 ? { sku, qty, erpWarehouse } : undefined;
 }
 
@@ -95,9 +95,20 @@ function findSh(rows: unknown[][]): string | undefined {
         const adjacent = text(row[index + 1]);
         if (adjacent) return adjacent;
       }
+      if (normalizeFieldHeader(value).includes('shticketno')) {
+        const adjacent = text(row[index + 1]);
+        if (/^SH-/i.test(adjacent)) return adjacent;
+      }
     }
   }
   return undefined;
+}
+
+function normalizeFieldHeader(value: unknown): string {
+  return text(value)
+    .toLowerCase()
+    .replace(/^[*#\d.\s]+/, '')
+    .replace(/[：:（）()\s_\-/]+/g, '');
 }
 
 function text(value: unknown): string {

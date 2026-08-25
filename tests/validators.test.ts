@@ -3,12 +3,17 @@ import test from 'node:test';
 import { normalizeAction, normalizeStockCondition } from '../src/ledger/normalize.js';
 import type { BusinessDate } from '../src/ledger/businessDate.js';
 import { validateLedgerInput } from '../src/ledger/validators.js';
+import { ENABLED_STATUSES, ITEM_TYPES } from '../src/config/controlledValues.js';
 
 const TEST_DATE = '2026-08-20' as BusinessDate;
 
 test('controlled action accepted and arbitrary action rejected', () => {
   assert.equal(normalizeAction('备货'), '备货');
   assert.throws(() => normalizeAction('随便写'));
+});
+test('item type and enabled status choices remain controlled', () => {
+  assert.deepEqual(ITEM_TYPES, ['成品', '物料']);
+  assert.deepEqual(ENABLED_STATUSES, ['是', '否']);
 });
 test('stock condition accepted and arbitrary condition rejected', () => {
   assert.equal(normalizeStockCondition('待修'), '待修');
