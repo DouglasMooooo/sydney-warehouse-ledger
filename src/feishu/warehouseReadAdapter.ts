@@ -20,6 +20,7 @@ import { deriveWeeklyWarehouseReport, type WeeklyManualMetrics, type WeeklyWareh
 import type { MovementQuery, MovementReadPort } from '../application/queries/movementQueryService.js';
 import type { OperationalLedgerRecord } from '../domain/movement/types.js';
 import { DeterministicMovementProjectionService } from '../domain/movement/movementProjection.js';
+import { DefaultMigrationPolicy, FEISHU_OPERATIONAL_SOURCE_BATCHES } from '../domain/movement/migrationPolicy.js';
 import { DeterministicSnLifecycleReplayService } from '../domain/sn/snLifecycleReplay.js';
 import type { CurrentSnState } from '../domain/sn/types.js';
 
@@ -28,6 +29,7 @@ const MAIN = {
   sku: 6, model: 7, sn: 9, qty: 10, fromLocation: 11, toLocation: 12,
   erpWarehouse: 13, stockCondition: 15, remark: 21,
 } as const;
+const MOVEMENT_PROJECTOR=new DeterministicMovementProjectionService(new DefaultMigrationPolicy(undefined,FEISHU_OPERATIONAL_SOURCE_BATCHES));
 
 export interface FeishuWarehouseReadConfig {
   spreadsheetUrl: string;
@@ -172,7 +174,7 @@ export class FeishuWarehouseReadAdapter implements WarehouseReadPort, MovementRe
 
   async findCurrentSerializedInventory(rawSn: string): Promise<CurrentSerializedInventory | undefined> {
     const sn = normalizeSn(rawSn);
-    const projected=new DeterministicMovementProjectionService().projectLedgerRecords(await this.readLedgerRecords({sn})).movements;
+    const projected=MOVEMENT_PROJECTOR.projectLedgerRecords(await this.readLedgerRecords({sn})).movements;
     const replayed=new DeterministicSnLifecycleReplayService().replay(sn,projected),state=replayed.currentState;
     if(state.status==='IN_STOCK'){
       const movement=projected.find(item=>item.movementId===state.lastMovementId);
@@ -276,7 +278,7 @@ export class FeishuWarehouseReadAdapter implements WarehouseReadPort, MovementRe
     const verifiedMappings: VerifiedSnMapping[] = [];
     const operationalStates: SnOperationalState[] = [];
     const movementRecords=ledgerRows.map(({row,index})=>toMovementLedgerRecord(row,index+2));
-    const projected=new DeterministicMovementProjectionService().projectLedgerRecords(movementRecords).movements;
+    const projected=MOVEMENT_PROJECTOR.projectLedgerRecords(movementRecords).movements;
     const replayService=new DeterministicSnLifecycleReplayService();
     for (const sn of requested) {
       const canonicalSn = canonicalizeSn(sn);
@@ -326,7 +328,7 @@ export class FeishuWarehouseReadAdapter implements WarehouseReadPort, MovementRe
 
 function legacyOperationalState(state:CurrentSnState,lastLifecycleAction?:string):Exclude<SnOperationalState['currentState'],'NOT_FOUND'>{
   if(lastLifecycleAction==='PREPARE'||lastLifecycleAction==='备货')return 'PREPARED';
-  if(state.status==='OUTBOUND')return 'OUTBOUND';if(state.status==='CONFLICT'||state.status==='UNKNOWN')return 'UNKNOWN';
+  if(state.status==='OUTBOUND')return 'OUTBOUND';if(state.status==='REMOVED'||state.status==='CONFLICT'||state.status==='UNKNOWN')return 'UNKNOWN';
   if(state.stockCondition==='待修')return 'REPAIR';if(state.stockCondition==='报废')return 'SCRAPPED';return 'GOOD';
 }
 
@@ -472,11 +474,11 @@ function mondayOf(date: BusinessDate): string {
 }
 
 function toMovementLedgerRecord(row:TypedSheetData['data'][number],sourceSequence:number):OperationalLedgerRecord{
-  const qty=parseSourceNumber(row[MAIN.qty]),remark=text(row[MAIN.remark]),sourceRecordIdentifier=/\bMOV-\d{8}-\d{6}\b/.exec(remark)?.[0];
+  const qty=parseSourceNumber(row[MAIN.qty]),remark=text(row[MAIN.remark]),sourceRecordIdentifier=/\bMOV-\d{8}-\d{6}\b/.exec(remark)?.[0],transactionGroupId=/\bTXG-\d{8}-\d{6}\b/.exec(remark)?.[0];
   const condition=text(row[MAIN.stockCondition]);
   const record:OperationalLedgerRecord={sourceRecordRef:{sourceSystem:'FEISHU_LEDGER',sourceType:'OPERATIONAL_LEDGER',internalRecordKey:`ledger-row:${sourceSequence}`},sourceSequence,
     sourceBatch:'FEISHU_OPERATIONAL_LEDGER',origin:sourceRecordIdentifier?'SYSTEM_NATIVE':/Import reference:/i.test(remark)?'MANUAL_IMPORT':'LEGACY_MIGRATION',
-    businessDate:businessDate(row[MAIN.date]),action:text(row[MAIN.action]),...(qty.kind==='valid'?{qty:qty.value}:{}),...(sourceRecordIdentifier?{sourceRecordIdentifier}:{}),
+    businessDate:businessDate(row[MAIN.date]),action:text(row[MAIN.action]),...(qty.kind==='valid'?{qty:qty.value}:{}),...(sourceRecordIdentifier?{sourceRecordIdentifier}:{}),...(transactionGroupId?{transactionGroupId}:{}),
     ...(businessDate(row[MAIN.outboundDate])?{actualOutboundDate:businessDate(row[MAIN.outboundDate])}:{}),...(text(row[MAIN.sku])?{sku:text(row[MAIN.sku])}:{}),
     ...(text(row[MAIN.model])?{displayName:text(row[MAIN.model])}:{}),...(text(row[MAIN.sn])?{sn:text(row[MAIN.sn])}:{}),...(text(row[MAIN.fromLocation])?{fromLocation:text(row[MAIN.fromLocation])}:{}),
     ...(text(row[MAIN.toLocation])?{toLocation:text(row[MAIN.toLocation])}:{}),...(text(row[MAIN.container])?{containerCode:text(row[MAIN.container])}:{}),

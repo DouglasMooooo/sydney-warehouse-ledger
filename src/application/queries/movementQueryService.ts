@@ -17,7 +17,7 @@ export class ProjectedMovementRepository implements MovementRepository {
 export class LiveMovementQueryService implements MovementQueryService {
   constructor(private readonly repository:MovementRepository){}
   async search(query:MovementQuery):Promise<MovementQueryResult>{validateQuery(query);const result=await this.repository.search(query);return {capabilityState:'AVAILABLE',items:result.movements.map(toDetail),issues:result.issues};}
-  async getById(movementId:string):Promise<MovementDetail|null>{if(!/^(?:MOV-\d{8}-\d{6}|LEGACY-[A-F0-9]{20})$/.test(movementId))throw new TypeError('INVALID_MOVEMENT_ID');const item=await this.repository.getById(movementId);return item?toDetail(item):null;}
+  async getById(movementId:string):Promise<MovementDetail|null>{if(!/^(?:MOV-\d{8}-\d{6}|(?:DERIVED|LEGACY)-[A-F0-9]{20})$/.test(movementId))throw new TypeError('INVALID_MOVEMENT_ID');const item=await this.repository.getById(movementId);return item?toDetail(item):null;}
 }
 function toDetail(item:InventoryMovement):MovementDetail{const {sourceRecordRef:_ref,sourceSequence:_sequence,...detail}=item;return detail;}
 function matches(item:InventoryMovement,q:MovementQuery){return (!q.movementId||item.movementId===q.movementId)&&(!q.sn||canonicalizeSn(item.sn??'')===canonicalizeSn(q.sn))&&(!q.sku||item.sku?.toUpperCase()===q.sku.toUpperCase())

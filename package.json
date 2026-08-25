@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "tsx --test tests/*.test.ts",
     "audit": "tsx src/scripts/audit.ts",
+    "audit:sn-replay": "tsx src/scripts/auditSnReplay.ts",
     "formula:dry-run": "tsx src/scripts/dryRunFormulaRepair.ts",
     "formula:apply": "tsx src/scripts/applyFormulaRepair.ts",
     "reconcile": "tsx src/scripts/reconcile.ts",

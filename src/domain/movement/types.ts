@@ -3,9 +3,12 @@ import type { InventoryWorkflow } from '../../application/inventoryActionEngine.
 
 export type MovementOrigin = 'SYSTEM_NATIVE' | 'LEGACY_MIGRATION' | 'MANUAL_IMPORT';
 export type MovementInventoryEffect = 'NONE' | 'INCREASE' | 'DECREASE' | 'TRANSFER' | 'STATE_TRANSITION';
-export type ReplayEligibility = 'CURRENT_STATE' | 'HISTORICAL_EVIDENCE_ONLY';
+export type ReplayEligibility = 'CURRENT_STATE' | 'MIGRATION_BASELINE' | 'HISTORICAL_EVIDENCE_ONLY';
 export type ValidationSeverity = 'INFO' | 'WARNING' | 'CRITICAL';
 export type MovementVerificationStatus = 'VERIFIED' | 'WARNING' | 'CONFLICT';
+export type MovementIdentityAuthority = 'PERSISTED' | 'DERIVED' | 'LEGACY';
+export type MovementInferenceMethod = 'EXPLICIT' | 'LEGACY_HEURISTIC';
+export type RepairLinkageStatus = 'EXPLICIT' | 'LEGACY_HEURISTIC' | 'LINKAGE_MISSING' | 'PAIR_MISMATCH';
 
 export interface SourceRecordRef {
   sourceSystem: 'FEISHU_LEDGER';
@@ -13,11 +16,25 @@ export interface SourceRecordRef {
   internalRecordKey: string;
 }
 
+/** Future registry contract only. No persistence is implemented in this phase. */
+export interface MovementRegistryRecord {
+  movementId:string;
+  transactionGroupId?:string;
+  correlationId?:string;
+  idempotencyKey:string;
+  sourceRecordFingerprint:string;
+  ledgerVerificationStatus:'PENDING'|'VERIFIED'|'MISMATCH';
+  createdAt:string;
+  createdBy:string;
+}
+
 export interface OperationalLedgerRecord {
   sourceRecordRef: SourceRecordRef;
   sourceSequence: number;
   sourceBatch?: string;
   sourceRecordIdentifier?: string;
+  transactionGroupId?: string;
+  correlationId?: string;
   origin: MovementOrigin;
   businessDate: string;
   actualOutboundDate?: string;
@@ -42,6 +59,8 @@ export interface OperationalLedgerRecord {
 
 export interface InventoryMovement {
   movementId: string;
+  identityAuthority: MovementIdentityAuthority;
+  transactionGroupId?: string;
   correlationId?: string;
   origin: MovementOrigin;
   replayEligibility: ReplayEligibility;
@@ -66,6 +85,8 @@ export interface InventoryMovement {
   pickupCode?: string;
   reason?: string;
   inventoryEffect: MovementInventoryEffect;
+  inferenceMethod?: MovementInferenceMethod;
+  repairLinkageStatus?: RepairLinkageStatus;
   verificationStatus: MovementVerificationStatus;
 }
 
@@ -74,7 +95,9 @@ export type MovementIssueCode =
   | 'DUPLICATE_CURRENT_SN' | 'SN_MULTIPLE_CURRENT_STATES'
   | 'OUTBOUND_SN_NOT_IN_STOCK' | 'DOUBLE_OUTBOUND'
   | 'RETURN_SN_ALREADY_IN_STOCK' | 'RETURN_MISSING_CONFIRMED_SH'
-  | 'REPAIR_COMPLETE_INVALID_STATE' | 'NEGATIVE_INVENTORY'
+  | 'REPAIR_COMPLETE_INVALID_STATE' | 'REPAIR_COMPLETE_LINKAGE_MISSING'
+  | 'REPAIR_COMPLETE_PAIR_MISMATCH' | 'LEGACY_REPAIR_INFERRED'
+  | 'INVALID_MOVEMENT_QTY' | 'NEGATIVE_INVENTORY'
   | 'INVALID_SERIALIZED_QTY' | 'UNKNOWN_ACTION'
   | 'MISSING_SOURCE_LOCATION' | 'MISSING_TARGET_LOCATION'
   | 'OUTBOUND_MISSING_ACTUAL_DATE' | 'ADJUSTMENT_REASON_REQUIRED' | 'RETURN_INVALID_TARGET';
