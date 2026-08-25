@@ -93,6 +93,8 @@ export interface DashboardSnapshot {
 
 /** Read-only port: it intentionally has no write/append method. */
 export interface WarehouseReadPort {
+  /** Business projection only: never exposes sheet coordinates or formulas. */
+  readCurrentInventory?(): Promise<InventoryCandidate[]>;
   readDashboardSource(asOf: BusinessDate): Promise<DashboardSnapshot>;
   findProduct(sku: string): Promise<ProductRecord | undefined>;
   findAvailableInventory(

@@ -36,6 +36,10 @@ export class FeishuWarehouseReadAdapter implements WarehouseReadPort {
     private readonly reader: WarehouseSheetReader = new LarkCliWarehouseSheetReader(config.spreadsheetUrl),
   ) {}
 
+  async readCurrentInventory(): Promise<InventoryCandidate[]> {
+    return parseInventoryRecords(await this.readInventory()).records;
+  }
+
   async readDashboardSource(asOf: BusinessDate): Promise<DashboardSnapshot> {
     const [main, inventory, validLocations] = await Promise.all([this.readMain(), this.readInventory(), this.readValidLocations()]);
     const mainRows = main.data.slice(1).filter((row) => text(row[MAIN.action]));

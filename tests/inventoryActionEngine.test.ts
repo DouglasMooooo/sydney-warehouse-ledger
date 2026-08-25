@@ -46,3 +46,11 @@ test('outbound loads the prepared transaction and requires actual outbound date'
   assert.equal(preview.rows[0]?.action,'出库');
   assert.equal(preview.rows[0]?.pickupCode,'SYD-00001');
 });
+
+test('return repair requires confirmed SH before the action engine can prepare a write',async()=>{
+  await assert.rejects(()=>prepareInventoryWorkflow({workflow:'RETURN_REPAIR',date:'2026-08-25',sn:'SN1'},port),/CONFIRMED_SH_REQUIRED/);
+  await assert.rejects(()=>prepareInventoryWorkflow({workflow:'RETURN_REPAIR',date:'2026-08-25',sn:'SN1',shNo:'TH-1'},port),/INVALID_SH_REFERENCE/);
+  const preview=await prepareInventoryWorkflow({workflow:'RETURN_REPAIR',date:'2026-08-25',sn:'SN1',shNo:'SH-1'},port);
+  assert.equal(preview.rows[0]?.shNo,'SH-1');
+  assert.equal(preview.rows[0]?.toLocation,'REPAIR-01');
+});

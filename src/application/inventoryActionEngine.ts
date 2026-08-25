@@ -3,6 +3,7 @@ import type { LedgerWriteInput } from '../ledger/typedWrite.js';
 import { prepareLedgerWrite } from '../ledger/typedWrite.js';
 import type { WarehouseReadPort } from './contracts.js';
 import { toRepairedGoodSn } from '../snResolver/resolver.js';
+import { isOperationalShNumber } from './shNumber.js';
 
 export const INVENTORY_WORKFLOWS = [
   'PREPARE', 'OUTBOUND', 'RETURN_REPAIR', 'INBOUND', 'MOVE', 'REPAIR_COMPLETE',
@@ -32,7 +33,7 @@ export interface ActionRule {
 export const ACTION_RULES: Readonly<Record<InventoryWorkflow, ActionRule>> = Object.freeze({
   PREPARE: rule('PREPARE', '工单备货', '备货', 'none', true, false, 'required', false, true, true, 'user', false),
   OUTBOUND: rule('OUTBOUND', '确认出库', '出库', 'decrease', true, false, 'required', true, true, true, 'preserve', false),
-  RETURN_REPAIR: rule('RETURN_REPAIR', '坏机接收', '退回维修', 'increase', false, true, 'required', false, false, false, 'repair-pending', false),
+  RETURN_REPAIR: rule('RETURN_REPAIR', '坏机接收', '退回维修', 'increase', false, true, 'required', false, true, false, 'repair-pending', false),
   INBOUND: rule('INBOUND', '正常入库', '入库', 'increase', false, true, 'required', false, false, false, 'user', false),
   MOVE: rule('MOVE', '移库', '移库', 'transfer', true, true, 'lookup', false, false, false, 'preserve', false),
   REPAIR_COMPLETE: rule('REPAIR_COMPLETE', '维修完成', '库存调增', 'transfer', true, true, 'lookup', false, false, false, 'repair-good', false),
@@ -106,12 +107,15 @@ export async function prepareInventoryWorkflow(input: InventoryWorkflowInput, po
         ...(prepared.containerCode ? { containerCode: prepared.containerCode } : {}) }];
       break;
     }
-    case 'RETURN_REPAIR':
-      rows = [{ date, action: '退回维修', sn: required(sn, 'MISSING_SN'), qty: 1, toLocation: 'REPAIR-01', stockCondition: '待修',
-        ...(input.sku?.trim() ? { sku: input.sku } : {}), ...(input.shNo?.trim() ? { shNo: input.shNo } : {}),
+    case 'RETURN_REPAIR': {
+      const confirmedSh = required(input.shNo, 'CONFIRMED_SH_REQUIRED');
+      if (!isOperationalShNumber(confirmedSh)) throw new TypeError('INVALID_SH_REFERENCE');
+      rows = [{ date, action: '退回维修', sn: required(sn, 'MISSING_SN'), shNo: confirmedSh, qty: 1, toLocation: 'REPAIR-01', stockCondition: '待修',
+        ...(input.sku?.trim() ? { sku: input.sku } : {}),
         ...(input.remark?.trim() ? { remark: input.remark } : {}) }];
       if (!input.sku?.trim()) warnings.push('料号未知：接收后进入待补资料队列。');
       break;
+    }
     case 'INBOUND':
       rows = [{ date, action: '入库', sku: required(input.sku, 'MISSING_SKU'), sn: required(sn, 'MISSING_SN'), qty: 1,
         toLocation: required(input.toLocation, 'MISSING_TARGET_LOCATION'), stockCondition: requiredCondition(input.stockCondition),
