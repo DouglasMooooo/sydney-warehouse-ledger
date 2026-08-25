@@ -86,7 +86,8 @@ test('warehouse HTTP routes do not import ledger writers or typed write executor
 
 test('return intake route accepts SN JSON and does not require an XLSX upload', () => {
   const route = readFileSync('app/api/warehouse/returns/preview/route.ts', 'utf8');
-  assert(route.includes('prepareReturnSnBatchPreview'));
+  assert(route.includes('prepareBadMachineReceivePreview'));
+  assert(route.includes('warehouseReadAdapterFromEnv'));
   assert(route.includes('request.json()'));
   assert(!route.includes('formData()'));
   assert(!route.includes('ExcelJsWorkbookReader'));

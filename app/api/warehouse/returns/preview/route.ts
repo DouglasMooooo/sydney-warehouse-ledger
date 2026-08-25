@@ -1,10 +1,11 @@
 import { NextResponse } from 'next/server';
 import { apiFailure, apiSuccess, clientSafeError, serverSafeErrorSummary } from '../../../../../src/application/apiResponse';
-import { prepareReturnSnBatchPreview } from '../../../../../src/application/returnBatchPreview';
+import { prepareBadMachineReceivePreview } from '../../../../../src/application/badMachineReceive';
 import { authenticateWarehouseRequest } from '../../../../../src/auth/requestAuth';
 import { todayInSydney } from '../../../../../src/ledger/businessDate';
 import { operationalRequestLogger } from '../../../../../src/observability/requestLog';
 import { expensiveOperationLimiter } from '../../../../../src/security/rateLimit';
+import { warehouseReadAdapterFromEnv } from '../../../../../src/feishu/warehouseReadAdapter';
 
 export const runtime = 'nodejs';
 
@@ -18,7 +19,7 @@ export async function POST(request: Request) {
     if (!body || typeof body !== 'object' || Array.isArray(body) || Object.keys(body).some((key) => key !== 'sns')) {
       throw new TypeError('请求只能包含 sns。');
     }
-    const preview = prepareReturnSnBatchPreview(body.sns, todayInSydney());
+    const preview = await prepareBadMachineReceivePreview(body.sns, todayInSydney(), warehouseReadAdapterFromEnv());
     log.success();
     return NextResponse.json(apiSuccess(preview), { headers: { 'Cache-Control': 'no-store' } });
   } catch (error) {

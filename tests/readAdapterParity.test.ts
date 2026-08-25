@@ -9,7 +9,7 @@ import { compareOpenApiLogicalReads } from '../src/uat/openApiParity.js';
 
 const mainHeader = Array.from({ length: 16 }, (_, index) => `C${index + 1}`);
 const mainRow: Array<string | number | boolean | null> = Array(16).fill('');
-Object.assign(mainRow, { 0: '2026-08-20', 2: '备货', 3: 'SH-1', 4: 'SYD-00001', 6: '00123', 7: 'MODEL-A', 10: 1, 11: 'R1', 15: '维修良品' });
+Object.assign(mainRow, { 0: '2026-08-20', 2: '备货', 3: 'SH-1', 4: 'SYD-00001', 6: '00123', 7: 'MODEL-A', 9: '60HD103064PM133', 10: 1, 11: 'R1', 15: '维修良品' });
 
 const tables: Record<string, TypedSheetData> = {
   main: typed('主表', mainHeader, [mainHeader, mainRow]),
@@ -41,6 +41,7 @@ test('lark-cli and OpenAPI transport boundaries produce identical logical wareho
     () => local.findAvailableInventory('00123', '维修良品', 1), () => hosted.findAvailableInventory('00123', '维修良品', 1),
     () => local.readTodayTasks(date), () => hosted.readTodayTasks(date),
     () => local.readLocationSummaries(), () => hosted.readLocationSummaries(),
+    () => local.readSnResolverContext(['60HD103064PM133']), () => hosted.readSnResolverContext(['60HD103064PM133']),
   ];
   const results = await Promise.all(operations.map((operation) => operation()));
   for (let index = 0; index < results.length; index += 2) assert.deepEqual(results[index], results[index + 1]);
@@ -48,6 +49,13 @@ test('lark-cli and OpenAPI transport boundaries produce identical logical wareho
   assert.equal(privacySafe.status, 'PASS');
   assert(privacySafe.checks.every((item) => item.status === 'PASS'));
   assert(!JSON.stringify(privacySafe).includes('00123'));
+  const resolverContext = await local.readSnResolverContext(['60HD103064PM133']);
+  assert.equal(resolverContext.verifiedMappings[0]?.materialCode, '00123');
+  assert.equal(resolverContext.verifiedMappings[0]?.canonicalSn, '60HD103*64PM133');
+  assert.equal(resolverContext.operationalStates[0]?.currentState, 'PREPARED');
+  const repairedEncodingContext = await local.readSnResolverContext(['60HD103R64PM133']);
+  assert.equal(repairedEncodingContext.verifiedMappings[0]?.materialCode, '00123');
+  assert.equal(repairedEncodingContext.verifiedMappings[0]?.canonicalSn, '60HD103*64PM133');
 });
 
 function typed(name: string, columns: string[], data: TypedSheetData['data']): TypedSheetData {

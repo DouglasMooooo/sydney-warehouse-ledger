@@ -13,6 +13,9 @@ import { requiredEnv } from './client.js';
 import type { TypedSheetData } from './types.js';
 import { parseSourceNumber } from './sourceValues.js';
 import { LarkCliWarehouseSheetReader, warehouseSheetReaderFromEnv, type WarehouseSheetReader } from './sheetReader.js';
+import { canonicalizeSn, normalizeSn } from '../snResolver/resolver.js';
+import type { VerifiedSnMapping } from '../snResolver/types.js';
+import type { MaterialOption, SnOperationalState, SnResolverContext } from '../application/badMachineReceive.js';
 
 const MAIN = {
   date: 0, outboundDate: 1, action: 2, sh: 3, pickup: 4, container: 5,
@@ -187,6 +190,45 @@ export class FeishuWarehouseReadAdapter implements WarehouseReadPort {
     return { exceptions, supportedCodes: LIVE_OPERATIONAL_EXCEPTION_CODES };
   }
 
+  async readSnResolverContext(sns: readonly string[]): Promise<SnResolverContext> {
+    const [main, products] = await Promise.all([
+      this.readMain(),
+      this.reader.readTable({ sheetName: '产品库存维护' }),
+    ]);
+    const requested = new Set(sns.map(normalizeSn));
+    const requestedCanonical = new Set(sns.map(canonicalizeSn));
+    const ledgerRows = main.data.slice(1).map((row, index) => ({ row, index }))
+      .filter(({ row }) => requestedCanonical.has(canonicalizeSn(text(row[MAIN.sn]))));
+    const byCanonical = new Map<string, typeof ledgerRows>();
+    for (const item of ledgerRows) {
+      const canonicalSn = canonicalizeSn(text(item.row[MAIN.sn]));
+      byCanonical.set(canonicalSn, [...(byCanonical.get(canonicalSn) ?? []), item]);
+    }
+    const verifiedMappings: VerifiedSnMapping[] = [];
+    const operationalStates: SnOperationalState[] = [];
+    for (const sn of requested) {
+      const canonicalSn = canonicalizeSn(sn);
+      const history = byCanonical.get(canonicalSn) ?? [];
+      const materials = [...new Set(history.map(({ row }) => text(row[MAIN.sku])).filter(Boolean))];
+      if (materials.length === 1) {
+        const latestWithMaterial = [...history].reverse().find(({ row }) => text(row[MAIN.sku]) === materials[0]);
+        verifiedMappings.push({
+          sn: latestWithMaterial ? normalizeSn(text(latestWithMaterial.row[MAIN.sn])) : sn,
+          canonicalSn, materialCode: materials[0]!,
+          ...(latestWithMaterial && text(latestWithMaterial.row[MAIN.model]) ? { model: text(latestWithMaterial.row[MAIN.model]) } : {}),
+          verified: true, source: 'LEDGER', createdAt: latestWithMaterial ? businessDate(latestWithMaterial.row[MAIN.date]) : '',
+        });
+      }
+      operationalStates.push(deriveSnOperationalState(sn, history.map(({ row }) => row)));
+    }
+    const skuIndex = columnIndex(products, ['SKU', '料号', '物料号', '产品料号']);
+    const modelIndex = optionalColumnIndex(products, ['Model', '机型', '型号']);
+    const materialOptions: MaterialOption[] = products.data.map((row) => ({
+      materialCode: text(row[skuIndex]), ...(modelIndex !== undefined && text(row[modelIndex]) ? { model: text(row[modelIndex]) } : {}),
+    })).filter((item) => item.materialCode);
+    return { verifiedMappings, operationalStates, materialOptions };
+  }
+
   private readMain(): Promise<TypedSheetData> {
     return this.reader.readTable({
       sheetId: this.config.mainSheetId,
@@ -205,6 +247,21 @@ export class FeishuWarehouseReadAdapter implements WarehouseReadPort {
     const location = columnIndex(table, ['库位编码（R-排-列-L/M/R）', '库位编码', 'Location']);
     return new Set(table.data.map((row) => text(row[location])).filter(Boolean));
   }
+}
+
+function deriveSnOperationalState(sn: string, history: TypedSheetData['data']): SnOperationalState {
+  if (!history.length) return { sn, currentState: 'NOT_FOUND', previouslyOutbound: false, reason: 'No ledger history found for this SN.' };
+  const previouslyOutbound = history.some((row) => text(row[MAIN.action]) === '出库');
+  const latest = history[history.length - 1]!;
+  const action = text(latest[MAIN.action]);
+  const condition = text(latest[MAIN.stockCondition]);
+  let currentState: SnOperationalState['currentState'] = 'UNKNOWN';
+  if (action === '出库') currentState = 'OUTBOUND';
+  else if (action === '备货') currentState = 'PREPARED';
+  else if (action === '退回维修' || condition === '待修') currentState = 'REPAIR';
+  else if (condition === '维修良品' || condition === '新机') currentState = 'GOOD';
+  else if (condition === '报废') currentState = 'SCRAPPED';
+  return { sn, currentState, previouslyOutbound, latestAction: action, reason: `Derived from latest ledger action: ${action || 'UNKNOWN'}.` };
 }
 
 export function warehouseReadAdapterFromEnv(): FeishuWarehouseReadAdapter {

@@ -69,7 +69,7 @@ export function WorkOrderPreviewClient({ initialBusinessDate }: { initialBusines
         <button className="file-picker" type="button" onClick={() => fileInput.current?.click()}><FileXls size={21} /><span>{fileName}</span></button>
         <button className="outline-button" disabled={loading || !file} type="submit"><UploadSimple size={18} />{loading ? '解析工单与库存…' : '导入工单'}</button>
       </form>
-      <Link className="secondary-workflow" href="/returns"><span><strong>批量退回返修</strong><small>只需输入 SN，默认 REPAIR-01</small></span><ArrowRight size={18} /></Link>
+      <Link className="secondary-workflow" href="/returns"><span><strong>坏机接收</strong><small>SN 自动识别料号，默认 REPAIR-01</small></span><ArrowRight size={18} /></Link>
     </aside>
     <section className="console-main">
       <div className="job-summary"><div><h3>{preview?.sh ?? '库存操作台 · 等待导入工单'}</h3><p>{fileName}</p></div><span>{preview ? '备货资料录入' : '未开始'}</span></div>
