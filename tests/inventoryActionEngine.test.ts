@@ -28,9 +28,10 @@ test('move looks up source and preserves condition while total inventory stays u
 });
 
 test('repair complete closes pending repair before creating repaired-good state',async()=>{
-  const preview=await prepareInventoryWorkflow({workflow:'REPAIR_COMPLETE',date:'2026-08-25',sn:'SN1',toLocation:'R2-1-1-L'},port);
+  const preview=await prepareInventoryWorkflow({workflow:'REPAIR_COMPLETE',date:'2026-08-25',sn:'60HD103064PM133',toLocation:'R2-1-1-L'},port);
   assert.deepEqual(preview.rows.map(row=>row.action),['库存调减','库存调增']);
   assert.deepEqual(preview.rows.map(row=>row.stockCondition),['待修','维修良品']);
+  assert.deepEqual(preview.rows.map(row=>row.sn),['60HD103064PM133','60HD103R64PM133']);
   assert.equal(preview.inventoryEffect,'transfer');
 });
 

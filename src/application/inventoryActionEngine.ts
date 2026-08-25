@@ -2,6 +2,7 @@ import type { StockCondition, LedgerAction } from '../config/controlledValues.js
 import type { LedgerWriteInput } from '../ledger/typedWrite.js';
 import { prepareLedgerWrite } from '../ledger/typedWrite.js';
 import type { WarehouseReadPort } from './contracts.js';
+import { toRepairedGoodSn } from '../snResolver/resolver.js';
 
 export const INVENTORY_WORKFLOWS = [
   'PREPARE', 'OUTBOUND', 'RETURN_REPAIR', 'INBOUND', 'MOVE', 'REPAIR_COMPLETE',
@@ -132,14 +133,15 @@ export async function prepareInventoryWorkflow(input: InventoryWorkflowInput, po
       const current = await currentBySn(port, required(sn, 'MISSING_SN'));
       if (current.stockCondition !== '待修' || current.currentState !== 'REPAIR') throw new TypeError('REPAIR_COMPLETE_REQUIRES_PENDING_REPAIR');
       const target = required(input.toLocation, 'MISSING_TARGET_LOCATION');
+      const repairedSn = toRepairedGoodSn(sn);
       before = { sku: current.sku, location: current.location, qty: 1, stockCondition: '待修' };
       after = { sku: current.sku, location: target, qty: 1, stockCondition: '维修良品' };
       const audit = 'Repair state correction · 维修完成状态转换';
       rows = [
         { date, action: '库存调减', sku: current.sku, sn, qty: 1, fromLocation: current.location, stockCondition: '待修', remark: audit },
-        { date, action: '库存调增', sku: current.sku, sn, qty: 1, toLocation: target, stockCondition: '维修良品', remark: audit },
+        { date, action: '库存调增', sku: current.sku, sn: repairedSn, qty: 1, toLocation: target, stockCondition: '维修良品', remark: `${audit} · SN ${sn} → ${repairedSn}` },
       ];
-      warnings.push('系统将以两条受控流水关闭“待修”并建立“维修良品”，总数量保持不变。');
+      warnings.push(`系统将关闭“待修”SN ${sn}，并以维修良品 SN ${repairedSn} 入账；总数量保持不变。`);
       break;
     }
     case 'ADJUST_INCREASE':

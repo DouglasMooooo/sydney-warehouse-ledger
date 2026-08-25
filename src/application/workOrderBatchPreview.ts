@@ -17,6 +17,13 @@ export interface WorkOrderBatchPreview {
   warnings: string[];
 }
 
+export interface MultiFileWorkOrderPreview {
+  mode: 'PREVIEW_ONLY';
+  zeroWritesPerformed: true;
+  documents: WorkOrderBatchPreview[];
+  summary: { files: number; workOrders: number; lines: number; errors: number };
+}
+
 export async function prepareParsedWorkOrderBatchPreview(
   parsed: ParsedWorkOrder,
   businessDate: string,

@@ -14,6 +14,14 @@ export function canonicalizeSn(rawSn: string): string {
   return sn.length >= 8 && (sn[7] === '0' || sn[7] === 'R') ? `${sn.slice(0, 7)}*${sn.slice(8)}` : sn;
 }
 
+/** Repair completion changes only the 8th SN status position to R. */
+export function toRepairedGoodSn(rawSn: string): string {
+  const sn = normalizeSn(rawSn);
+  if (sn.length < 8) throw new TypeError('SN_TOO_SHORT_FOR_REPAIR_STATUS');
+  if (sn[7] !== '0' && sn[7] !== 'R') throw new TypeError('SN_STATUS_POSITION_UNKNOWN');
+  return `${sn.slice(0, 7)}R${sn.slice(8)}`;
+}
+
 export function resolveSnMaterial(
   inputSn: string,
   history: readonly VerifiedSnMapping[] = [],

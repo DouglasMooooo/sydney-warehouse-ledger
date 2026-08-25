@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { apiFailure, apiSuccess, clientSafeError, serverSafeErrorSummary } from '../../../../../src/application/apiResponse';
-import { prepareParsedWorkOrderBatchPreview } from '../../../../../src/application/workOrderBatchPreview';
+import { prepareParsedWorkOrderBatchPreview, type MultiFileWorkOrderPreview } from '../../../../../src/application/workOrderBatchPreview';
 import { authenticateWarehouseRequest } from '../../../../../src/auth/requestAuth';
 import { expensiveOperationLimiter } from '../../../../../src/security/rateLimit';
 import { warehouseReadAdapterFromEnv } from '../../../../../src/feishu/warehouseReadAdapter';
@@ -22,20 +22,27 @@ export async function POST(request: Request) {
     }
     const form = await request.formData();
     const businessDate = form.get('businessDate');
-    const file = form.get('file');
+    const files = [...form.getAll('files'), form.get('file')].filter((item): item is File => item instanceof File && item.size > 0);
     if (typeof businessDate !== 'string' || !businessDate.trim()) {
       log.failure('INVALID_REQUEST');
       return NextResponse.json(apiFailure('INVALID_REQUEST', '缺少 Sydney Business Date。', 'businessDate'), { status: 400 });
     }
-    if (!(file instanceof File)) {
+    if (!files.length || files.length > 20) {
       log.failure('INVALID_REQUEST');
-      return NextResponse.json(apiFailure('INVALID_REQUEST', '缺少 XLSX 文件。', 'file'), { status: 400 });
+      return NextResponse.json(apiFailure('INVALID_REQUEST', '请选择 1–20 个 XLSX 文件。', 'files'), { status: 400 });
     }
-    validateXlsxUpload(file.name, file.size);
-    const parsed = await new XlsxWorkOrderParser(new ExcelJsWorkbookReader()).parse({
-      bytes: new Uint8Array(await file.arrayBuffer()), sourceFileName: file.name,
-    });
-    const preview = await prepareParsedWorkOrderBatchPreview(parsed, businessDate.trim(), warehouseReadAdapterFromEnv());
+    const adapter = warehouseReadAdapterFromEnv();
+    const documents = [];
+    for (const file of files) {
+      validateXlsxUpload(file.name, file.size);
+      const parsed = await new XlsxWorkOrderParser(new ExcelJsWorkbookReader()).parse({
+        bytes: new Uint8Array(await file.arrayBuffer()), sourceFileName: file.name,
+      });
+      documents.push(await prepareParsedWorkOrderBatchPreview(parsed, businessDate.trim(), adapter));
+    }
+    const preview: MultiFileWorkOrderPreview = { mode:'PREVIEW_ONLY', zeroWritesPerformed:true, documents,
+      summary:{files:documents.length,workOrders:documents.filter(item=>item.sh).length,
+        lines:documents.reduce((sum,item)=>sum+item.lines.length,0),errors:documents.reduce((sum,item)=>sum+item.errors.length,0)} };
     log.success();
     return NextResponse.json(apiSuccess(preview));
   } catch (error) {

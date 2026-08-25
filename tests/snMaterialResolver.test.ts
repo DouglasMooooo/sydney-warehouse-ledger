@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { canonicalizeSn, normalizeSn, resolveSnMaterial } from '../src/snResolver/resolver.js';
+import { canonicalizeSn, normalizeSn, resolveSnMaterial, toRepairedGoodSn } from '../src/snResolver/resolver.js';
 import type { VerifiedSnMapping } from '../src/snResolver/types.js';
 
 const material = (sn: string) => resolveSnMaterial(sn).materialCode;
@@ -11,6 +11,12 @@ test('normalization removes whitespace and canonicalizes only the 8th-position 0
   assert.equal(canonicalizeSn('60HD103R64PM133'), '60HD103*64PM133');
   assert.equal(resolveSnMaterial('60HD103064PM133').snStatus, 'ORIGINAL');
   assert.equal(resolveSnMaterial('60HD103R64PM133').snStatus, 'REPAIRED_GOOD');
+});
+
+test('repair completion changes exactly the eighth SN position to R', () => {
+  assert.equal(toRepairedGoodSn('60HD103064PM133'), '60HD103R64PM133');
+  assert.equal(toRepairedGoodSn('60HD103R64PM133'), '60HD103R64PM133');
+  assert.throws(() => toRepairedGoodSn('60HD103X64PM133'), /SN_STATUS_POSITION_UNKNOWN/);
 });
 
 test('0/R encoding status does not change H3 material resolution', () => {
@@ -62,4 +68,3 @@ test('legacy-sensitive HG502 and revision-extensible E5S are HIGH, not guessed E
   assert.equal(resolveSnMaterial('60HG50206123456').confidence, 'HIGH');
   assert.equal(resolveSnMaterial('60E5S4806123456').confidence, 'HIGH');
 });
-

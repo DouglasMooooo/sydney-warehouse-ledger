@@ -114,7 +114,8 @@ export async function prepareWorkOrderPreview(
     && candidate.availableQty >= qty!
     && candidate.location);
   eligible.sort((left, right) =>
-    right.availableQty - left.availableQty
+    Number(right.location === 'FLEX-01') - Number(left.location === 'FLEX-01')
+    || right.availableQty - left.availableQty
     || left.location.localeCompare(right.location)
     || (left.container ?? '').localeCompare(right.container ?? ''));
   const recommendation = eligible[0];

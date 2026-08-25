@@ -221,6 +221,17 @@ test('XLSX decoder is server-only and the browser sends binary FormData to expli
   assert(!client.includes('file.text()'));
 });
 
+test('prepared location recommendation prioritizes sufficient FLEX-01 inventory', async () => {
+  const port = new FakeReadPort();
+  port.inventory = [
+    { ...port.inventory[0]!, availableQty: 20, location: 'R1-1-1-L' },
+    { ...port.inventory[0]!, availableQty: 2, location: 'FLEX-01', container: 'FLEX-C1' },
+  ];
+  const preview = await prepareWorkOrderPreview({ businessDate: BUSINESS_DATE, sourceText: VALID_TEXT }, port);
+  assert.equal(preview.recommendation?.location, 'FLEX-01');
+  assert.equal(preview.recommendation?.container, 'FLEX-C1');
+});
+
 test('business workflow UI derives ledger actions instead of exposing an action selector', () => {
   const prepared = readFileSync('app/(warehouse)/work-orders/preview-client.tsx', 'utf8');
   const operations = readFileSync('app/(warehouse)/moves/operations-client.tsx', 'utf8');
