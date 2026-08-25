@@ -59,7 +59,7 @@ test('current inventory accepts the live UAT Chinese header schema', () => {
   });
   assert.deepEqual(parsed, {
     records: [{
-      sku: '97-414-00027-00', model: 'EQ4800-side-cover', location: 'R1-2-1-L',
+      sku: '97-414-00027-00', displayName: 'EQ4800-side-cover', location: 'R1-2-1-L',
       availableQty: 288, condition: '物料',
     }],
     missingQty: 0,

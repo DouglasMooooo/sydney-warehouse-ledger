@@ -14,14 +14,15 @@ export class LiveInventoryQueryService implements InventoryQueryService {
   async search(query: InventoryQuery): Promise<InventoryQueryResult> {
     const filters = validateQuery(query);
     const rows = (await this.port.readCurrentInventory()).filter((row) =>
-      matches(row.sku, filters.sku) && matches(row.model, filters.displayName)
+      matches(row.sku, filters.sku) && matches(row.displayName ?? row.model ?? '', filters.displayName)
       && matches(row.location, filters.location) && matches(row.condition, filters.stockCondition));
     const groups = new Map<string, InventoryQueryResult['items'][number]>();
     for (const row of rows) {
       const key = `${normalize(row.sku)}\u0000${normalize(row.condition)}`;
       let item = groups.get(key);
       if (!item) {
-        item = { sku: row.sku, ...(row.model ? { displayName: row.model } : {}), stockCondition: row.condition, totalQty: 0, locations: [] };
+        const displayName=row.displayName??row.model;
+        item = { sku: row.sku, ...(displayName ? { displayName } : {}), stockCondition: row.condition, totalQty: 0, locations: [] };
         groups.set(key, item);
       }
       item.totalQty += row.availableQty;

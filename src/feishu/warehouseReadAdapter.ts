@@ -17,6 +17,11 @@ import { canonicalizeSn, normalizeSn } from '../snResolver/resolver.js';
 import type { VerifiedSnMapping } from '../snResolver/types.js';
 import type { MaterialOption, SnOperationalState, SnResolverContext } from '../application/badMachineReceive.js';
 import { deriveWeeklyWarehouseReport, type WeeklyManualMetrics, type WeeklyWarehouseReport } from '../application/weeklyReport.js';
+import type { MovementQuery, MovementReadPort } from '../application/queries/movementQueryService.js';
+import type { OperationalLedgerRecord } from '../domain/movement/types.js';
+import { DeterministicMovementProjectionService } from '../domain/movement/movementProjection.js';
+import { DeterministicSnLifecycleReplayService } from '../domain/sn/snLifecycleReplay.js';
+import type { CurrentSnState } from '../domain/sn/types.js';
 
 const MAIN = {
   date: 0, outboundDate: 1, action: 2, sh: 3, pickup: 4, container: 5,
@@ -30,7 +35,7 @@ export interface FeishuWarehouseReadConfig {
   currentInventorySheetId: string;
 }
 
-export class FeishuWarehouseReadAdapter implements WarehouseReadPort {
+export class FeishuWarehouseReadAdapter implements WarehouseReadPort, MovementReadPort {
   constructor(
     private readonly config: FeishuWarehouseReadConfig,
     private readonly reader: WarehouseSheetReader = new LarkCliWarehouseSheetReader(config.spreadsheetUrl),
@@ -38,6 +43,11 @@ export class FeishuWarehouseReadAdapter implements WarehouseReadPort {
 
   async readCurrentInventory(): Promise<InventoryCandidate[]> {
     return parseInventoryRecords(await this.readInventory()).records;
+  }
+
+  async readLedgerRecords(query: MovementQuery = {}): Promise<OperationalLedgerRecord[]> {
+    const rows=(await this.readMain()).data.slice(1).map((row,index)=>toMovementLedgerRecord(row,index+2)).filter((record)=>record.action);
+    return rows.filter((record)=>movementRecordMatches(record,query));
   }
 
   async readDashboardSource(asOf: BusinessDate): Promise<DashboardSnapshot> {
@@ -62,7 +72,7 @@ export class FeishuWarehouseReadAdapter implements WarehouseReadPort {
     const byModel = new Map<string, number>();
     const byLocation = new Map<string, number>();
     for (const item of inventoryRows) {
-      const key = `${item.model}\u0000${item.condition}`;
+      const key = `${item.displayName??item.model??''}\u0000${item.condition}`;
       byModel.set(key, (byModel.get(key) ?? 0) + item.availableQty);
       byLocation.set(item.location, (byLocation.get(item.location) ?? 0) + item.availableQty);
     }
@@ -143,7 +153,7 @@ export class FeishuWarehouseReadAdapter implements WarehouseReadPort {
     const skuIndex = columnIndex(table, ['SKU', '料号', '物料号', '产品料号']);
     const modelIndex = columnIndex(table, ['Model', '机型', '型号']);
     const row = table.data.find((item) => text(item[skuIndex]) === sku);
-    return row ? { sku, model: text(row[modelIndex]) } : undefined;
+    return row ? { sku, displayName: text(row[modelIndex]) } : undefined;
   }
 
   async findAvailableInventory(
@@ -162,21 +172,19 @@ export class FeishuWarehouseReadAdapter implements WarehouseReadPort {
 
   async findCurrentSerializedInventory(rawSn: string): Promise<CurrentSerializedInventory | undefined> {
     const sn = normalizeSn(rawSn);
-    const canonical = canonicalizeSn(sn);
-    const history = (await this.readMain()).data.slice(1)
-      .filter((row) => canonicalizeSn(text(row[MAIN.sn])) === canonical);
-    if (!history.length) return undefined;
-    const latest = history[history.length - 1]!;
-    const state = deriveSnOperationalState(sn, history).currentState;
-    if (state === 'NOT_FOUND') return undefined;
-    const action = text(latest[MAIN.action]);
-    const location = action === '移库' || action === '入库' || action === '退回维修' || action === '库存调增'
-      ? text(latest[MAIN.toLocation]) : text(latest[MAIN.fromLocation]);
-    const condition = text(latest[MAIN.stockCondition]) as StockCondition;
-    const sku = text(latest[MAIN.sku]);
-    if (!sku || !location || !STOCK_CONDITIONS.includes(condition)) return undefined;
-    return { sn, sku, location, stockCondition: condition, currentState: state,
-      ...(text(latest[MAIN.container]) ? { containerCode: text(latest[MAIN.container]) } : {}) };
+    const projected=new DeterministicMovementProjectionService().projectLedgerRecords(await this.readLedgerRecords({sn})).movements;
+    const replayed=new DeterministicSnLifecycleReplayService().replay(sn,projected),state=replayed.currentState;
+    if(state.status==='IN_STOCK'){
+      const movement=projected.find(item=>item.movementId===state.lastMovementId);
+      return {sn:state.sn,sku:state.sku,location:state.location,stockCondition:state.stockCondition,currentState:legacyOperationalState(state),
+        ...(movement?.containerCode?{containerCode:movement.containerCode}:{})};
+    }
+    if(state.status==='OUTBOUND'){
+      const movement=projected.find(item=>item.movementId===state.lastMovementId),condition=movement?.stockConditionBefore;
+      if(!state.sku||!movement?.fromLocation||!condition)return undefined;
+      return {sn:state.sn,sku:state.sku,location:movement.fromLocation,stockCondition:condition,currentState:'OUTBOUND',...(movement.containerCode?{containerCode:movement.containerCode}:{})};
+    }
+    return undefined;
   }
 
   async findPreparedByReference(reference: string, rawSn: string): Promise<PreparedTransaction | undefined> {
@@ -267,12 +275,16 @@ export class FeishuWarehouseReadAdapter implements WarehouseReadPort {
     }
     const verifiedMappings: VerifiedSnMapping[] = [];
     const operationalStates: SnOperationalState[] = [];
+    const movementRecords=ledgerRows.map(({row,index})=>toMovementLedgerRecord(row,index+2));
+    const projected=new DeterministicMovementProjectionService().projectLedgerRecords(movementRecords).movements;
+    const replayService=new DeterministicSnLifecycleReplayService();
     for (const sn of requested) {
       const canonicalSn = canonicalizeSn(sn);
       const history = byCanonical.get(canonicalSn) ?? [];
       const materials = [...new Set(history.map(({ row }) => text(row[MAIN.sku])).filter(Boolean))];
       if (materials.length === 1) {
-        const latestWithMaterial = [...history].reverse().find(({ row }) => text(row[MAIN.sku]) === materials[0]);
+        const latestWithMaterial = history.filter(({row})=>text(row[MAIN.sku])===materials[0]).sort((left,right)=>
+          businessDate(right.row[MAIN.date]).localeCompare(businessDate(left.row[MAIN.date]))||right.index-left.index)[0];
         verifiedMappings.push({
           sn: latestWithMaterial ? normalizeSn(text(latestWithMaterial.row[MAIN.sn])) : sn,
           canonicalSn, materialCode: materials[0]!,
@@ -280,7 +292,9 @@ export class FeishuWarehouseReadAdapter implements WarehouseReadPort {
           verified: true, source: 'LEDGER', createdAt: latestWithMaterial ? businessDate(latestWithMaterial.row[MAIN.date]) : '',
         });
       }
-      operationalStates.push(deriveSnOperationalState(sn, history.map(({ row }) => row)));
+      const replayed=replayService.replay(sn,projected);
+      operationalStates.push({sn,currentState:legacyOperationalState(replayed.currentState,replayed.lifecycle.at(-1)?.action),previouslyOutbound:replayed.lifecycle.some(item=>item.action==='OUTBOUND'||item.action==='出库'),
+        ...(replayed.lifecycle.at(-1)?.action?{latestAction:replayed.lifecycle.at(-1)!.action}:{}),reason:`Deterministic movement replay: ${replayed.replayStatus}.`});
     }
     const skuIndex = columnIndex(products, ['SKU', '料号', '物料号', '产品料号']);
     const modelIndex = optionalColumnIndex(products, ['Model', '机型', '型号']);
@@ -310,19 +324,10 @@ export class FeishuWarehouseReadAdapter implements WarehouseReadPort {
   }
 }
 
-function deriveSnOperationalState(sn: string, history: TypedSheetData['data']): SnOperationalState {
-  if (!history.length) return { sn, currentState: 'NOT_FOUND', previouslyOutbound: false, reason: 'No ledger history found for this SN.' };
-  const previouslyOutbound = history.some((row) => text(row[MAIN.action]) === '出库');
-  const latest = history[history.length - 1]!;
-  const action = text(latest[MAIN.action]);
-  const condition = text(latest[MAIN.stockCondition]);
-  let currentState: SnOperationalState['currentState'] = 'UNKNOWN';
-  if (action === '出库') currentState = 'OUTBOUND';
-  else if (action === '备货') currentState = 'PREPARED';
-  else if (action === '退回维修' || condition === '待修') currentState = 'REPAIR';
-  else if (condition === '维修良品' || condition === '新机') currentState = 'GOOD';
-  else if (condition === '报废') currentState = 'SCRAPPED';
-  return { sn, currentState, previouslyOutbound, latestAction: action, reason: `Derived from latest ledger action: ${action || 'UNKNOWN'}.` };
+function legacyOperationalState(state:CurrentSnState,lastLifecycleAction?:string):Exclude<SnOperationalState['currentState'],'NOT_FOUND'>{
+  if(lastLifecycleAction==='PREPARE'||lastLifecycleAction==='备货')return 'PREPARED';
+  if(state.status==='OUTBOUND')return 'OUTBOUND';if(state.status==='CONFLICT'||state.status==='UNKNOWN')return 'UNKNOWN';
+  if(state.stockCondition==='待修')return 'REPAIR';if(state.stockCondition==='报废')return 'SCRAPPED';return 'GOOD';
 }
 
 export function warehouseReadAdapterFromEnv(): FeishuWarehouseReadAdapter {
@@ -341,6 +346,7 @@ export function parseInventoryRecords(table: TypedSheetData): { records: Invento
   const container = optionalColumnIndex(table, ['Container', '容器', '容器码']);
   const available = columnIndex(table, ['Available Qty', '可用数量', '可用库存', '可用Qty', '当前数量']);
   const condition = columnIndex(table, ['Stock Condition', '库存属性', '属性']);
+  const sn = optionalColumnIndex(table, ['SN', '序列号', 'Serial Number']);
   const records: InventoryCandidate[] = [];
   let missingQty = 0;
   let invalidQty = 0;
@@ -358,11 +364,12 @@ export function parseInventoryRecords(table: TypedSheetData): { records: Invento
     if (!skuValue || !locationValue || availableQty <= 0 || !STOCK_CONDITIONS.includes(conditionValue as StockCondition)) continue;
     const item: InventoryCandidate = {
       sku: skuValue,
-      model: modelValue,
+      ...(modelValue ? { displayName: modelValue } : {}),
       location: locationValue,
       availableQty,
       condition: conditionValue as StockCondition,
     };
+    const snValue=sn===undefined?'':text(row[sn]);if(snValue)item.sn=snValue;
     const containerValue = container === undefined ? '' : text(row[container]);
     if (containerValue) item.container = containerValue;
     records.push(item);
@@ -462,4 +469,25 @@ function mondayOf(date: BusinessDate): string {
   const day = value.getUTCDay() || 7;
   value.setUTCDate(value.getUTCDate() - day + 1);
   return value.toISOString().slice(0, 10);
+}
+
+function toMovementLedgerRecord(row:TypedSheetData['data'][number],sourceSequence:number):OperationalLedgerRecord{
+  const qty=parseSourceNumber(row[MAIN.qty]),remark=text(row[MAIN.remark]),sourceRecordIdentifier=/\bMOV-\d{8}-\d{6}\b/.exec(remark)?.[0];
+  const condition=text(row[MAIN.stockCondition]);
+  const record:OperationalLedgerRecord={sourceRecordRef:{sourceSystem:'FEISHU_LEDGER',sourceType:'OPERATIONAL_LEDGER',internalRecordKey:`ledger-row:${sourceSequence}`},sourceSequence,
+    sourceBatch:'FEISHU_OPERATIONAL_LEDGER',origin:sourceRecordIdentifier?'SYSTEM_NATIVE':/Import reference:/i.test(remark)?'MANUAL_IMPORT':'LEGACY_MIGRATION',
+    businessDate:businessDate(row[MAIN.date]),action:text(row[MAIN.action]),...(qty.kind==='valid'?{qty:qty.value}:{}),...(sourceRecordIdentifier?{sourceRecordIdentifier}:{}),
+    ...(businessDate(row[MAIN.outboundDate])?{actualOutboundDate:businessDate(row[MAIN.outboundDate])}:{}),...(text(row[MAIN.sku])?{sku:text(row[MAIN.sku])}:{}),
+    ...(text(row[MAIN.model])?{displayName:text(row[MAIN.model])}:{}),...(text(row[MAIN.sn])?{sn:text(row[MAIN.sn])}:{}),...(text(row[MAIN.fromLocation])?{fromLocation:text(row[MAIN.fromLocation])}:{}),
+    ...(text(row[MAIN.toLocation])?{toLocation:text(row[MAIN.toLocation])}:{}),...(text(row[MAIN.container])?{containerCode:text(row[MAIN.container])}:{}),
+    ...(text(row[MAIN.sh])?{shNo:text(row[MAIN.sh])}:{}),...(text(row[MAIN.pickup])?{pickupCode:text(row[MAIN.pickup])}:{}),...(remark?{remark,reason:remark}:{}),
+  };
+  if(STOCK_CONDITIONS.includes(condition as StockCondition))record.stockCondition=condition as StockCondition;
+  return record;
+}
+
+function movementRecordMatches(record:OperationalLedgerRecord,query:MovementQuery):boolean{
+  return (!query.sn||canonicalizeSn(record.sn??'')===canonicalizeSn(query.sn))&&(!query.sku||record.sku?.toUpperCase()===query.sku.toUpperCase())
+    &&(!query.shNo||record.shNo?.toUpperCase()===query.shNo.toUpperCase())&&(!query.fromDate||record.businessDate>=query.fromDate)&&(!query.toDate||record.businessDate<=query.toDate)
+    &&(!query.location||record.fromLocation===query.location||record.toLocation===query.location);
 }

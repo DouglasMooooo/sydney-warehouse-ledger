@@ -26,9 +26,17 @@ export interface ConfirmedLedgerOperation {
   reconciliation: 'PASS';
 }
 
-export interface InventoryCandidate {
+export interface ProductIdentity {
   sku: string;
-  model: string;
+  displayName?: string;
+  model?: string;
+  itemType?: string;
+  category?: string;
+}
+
+export interface InventoryCandidate extends ProductIdentity {
+  sku: string;
+  sn?: string;
   location: string;
   container?: string;
   availableQty: number;
@@ -54,10 +62,7 @@ export interface PreparedTransaction {
   stockCondition: InventoryCandidate['condition'];
 }
 
-export interface ProductRecord {
-  sku: string;
-  model: string;
-}
+export interface ProductRecord extends ProductIdentity {}
 
 export interface DashboardSnapshot {
   businessDate: BusinessDate;

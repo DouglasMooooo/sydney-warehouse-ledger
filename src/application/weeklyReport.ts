@@ -43,9 +43,9 @@ export function deriveWeeklyWarehouseReport(rows: OperationalLedgerRow[], invent
   const inbound = rows.filter(row => row.action === '入库' && row.stockCondition === '新机' && inWeek(row.date));
   const prepared = rows.filter(row => row.action === '备货' && inWeek(row.date));
   const current = (condition: string) => inventory.filter(item => item.condition === condition).reduce((sum, item) => sum + item.availableQty, 0);
-  const models = new Set([...inventory.map(item => item.model), ...shipped.map(item => item.model)].filter(Boolean));
+  const models = new Set<string>([...inventory.map(item => item.displayName??item.model), ...shipped.map(item => item.model)].filter((value):value is string=>Boolean(value)));
   const byModel = [...models].sort().map(model => {
-    const stock = inventory.filter(item => item.model === model);
+    const stock = inventory.filter(item => (item.displayName??item.model) === model);
     const modelShipped = shipped.filter(item => item.model === model);
     const newStock = stock.filter(item => item.condition === '新机').reduce((sum, item) => sum + item.availableQty, 0);
     const repairedGoodStock = stock.filter(item => item.condition === '维修良品').reduce((sum, item) => sum + item.availableQty, 0);

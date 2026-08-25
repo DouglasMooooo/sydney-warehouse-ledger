@@ -99,10 +99,11 @@ export async function confirmPreparedWorkOrderBatch(
           erpWarehouse:line.erpWarehouse,stockCondition:condition,remark:provenance,
           ...(source.container?{containerCode:source.container}:{})});
       }
-      const key = `${line.sku}\u0000${product.model}\u0000${line.erpWarehouse}`;
+      const productName=product.displayName??product.model??line.sku;
+      const key = `${line.sku}\u0000${productName}\u0000${line.erpWarehouse}`;
       const current = labelGroups.get(key);
       if (current) current.qty += line.sns.length;
-      else labelGroups.set(key, { sku: line.sku, model: product.model, erpWarehouse: line.erpWarehouse,
+      else labelGroups.set(key, { sku: line.sku, model: productName, erpWarehouse: line.erpWarehouse,
         stockCondition: condition, qty: line.sns.length, suggestedLocation: line.location,
         ...(source.container ? { containerCode: source.container } : {}) });
     }

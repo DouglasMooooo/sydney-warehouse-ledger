@@ -163,7 +163,7 @@ export async function prepareWorkOrderPreview(
     sh,
     pickupCode,
     sku: replacementSku,
-    model: product.model,
+    model: product.displayName ?? product.model ?? replacementSku,
     qty,
     erpWarehouse,
     fromLocation: recommendation.location,

@@ -7,8 +7,8 @@ import { operationalLedgerProvenance, workflowDefinitionProvenance } from '../sr
 import { assertAiSafePayload, UnsafeAiPayloadError } from '../src/ai/sanitize.js';
 import { withAiQueryRoute } from '../src/ai/queryRoute.js';
 import { LiveInventoryQueryService } from '../src/application/queries/inventoryQueryService.js';
-import { PendingMovementQueryService } from '../src/application/queries/movementQueryService.js';
-import { PendingSnContextService } from '../src/application/queries/snContextService.js';
+import { LiveMovementQueryService,ProjectedMovementRepository } from '../src/application/queries/movementQueryService.js';
+import { ReplaySnContextService } from '../src/application/queries/snContextService.js';
 import { CombinedShQueryService, isOperationalShNumber } from '../src/application/queries/shQueryService.js';
 import { parseLegacyInventoryIntent } from '../src/application/queries/legacyAiQueryService.js';
 import { ACTION_RULES } from '../src/application/inventoryActionEngine.js';
@@ -89,9 +89,10 @@ test('workflow definitions correspond to Action Engine and Return Repair require
   assert.equal(returned.availability,'DEPENDENCY_PENDING');assert.equal(WORKFLOW_KNOWLEDGE_SOURCE.kind,'WORKFLOW_DEFINITION');
 });
 
-test('movement and lifecycle dependencies are explicit and legacy NL intent never guesses',async()=>{
-  assert.deepEqual(await new PendingMovementQueryService().search({sn:'SN1'}),{capabilityState:'MOVEMENT_MODEL_PENDING',items:[]});
-  const sn=await new PendingSnContextService().get('SN1');assert.equal(sn.lifecycleStatus,'DEPENDENCY_PENDING');assert.equal(sn.currentState.status,'UNAVAILABLE');
+test('movement foundation is internal while legacy NL intent never guesses',async()=>{
+  const repository=new ProjectedMovementRepository({readLedgerRecords:async()=>[]});
+  assert.deepEqual(await new LiveMovementQueryService(repository).search({sn:'SN1'}),{capabilityState:'AVAILABLE',items:[],issues:[]});
+  const sn=await new ReplaySnContextService(repository).get('SN1');assert.equal(sn.replayStatus,'VERIFIED');assert.equal(sn.currentState.status,'UNKNOWN');
   assert.deepEqual(parseLegacyInventoryIntent('R1-1-1-L 新机库存'),{stockCondition:'新机',location:'R1-1-1-L'});
   assert.throws(()=>parseLegacyInventoryIntent('请分析这个问题'),/Ambiguous legacy query/);
   assert.throws(()=>parseLegacyInventoryIntent('查询 SN 生命周期'),/unavailable model/);
