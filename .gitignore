@@ -23,6 +23,7 @@ outputs/
 tmp/
 artifacts/migration-baseline-candidates.json
 artifacts/migration-baseline-review.csv
+artifacts/migration-baseline-approved-preview.json
 sheet_work/
 xlsx_processing/
 .phase1/

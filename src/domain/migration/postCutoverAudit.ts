@@ -1,0 +1,6 @@
+import type { InventoryMovement } from '../movement/types.js';
+import type { PostCutoverUatPlan } from './types.js';
+
+export const DEFAULT_POST_CUTOVER_UAT_PLAN:PostCutoverUatPlan={minimumMovementSamples:{move:5,outbound:5,returnRepair:5,repairComplete:3},requiredAssertions:['All post-cutover records occur after configured cutover date.','Replay has no unresolved critical conflicts.','Current physical/current projection reconciliation is recorded.','Derived identities are disclosed until a Movement Registry exists.']};
+
+export function auditPostCutover(movements:readonly InventoryMovement[],cutoverDate:string,plan:PostCutoverUatPlan=DEFAULT_POST_CUTOVER_UAT_PLAN){const post=movements.filter(item=>item.businessDate>cutoverDate),count=(workflow:string)=>post.filter(item=>item.workflow===workflow).length;if(!post.length)return {status:'POST_CUTOVER_AUDIT_NOT_READY' as const,reason:'NO_POST_CUTOVER_MOVEMENTS' as const,cutoverDate,postCutoverMovementCount:0,plan};return {status:'READY_FOR_AUDIT' as const,cutoverDate,postCutoverMovementCount:post.length,counts:{move:count('MOVE'),outbound:count('OUTBOUND'),returnRepair:count('RETURN_REPAIR'),repairComplete:count('REPAIR_COMPLETE')},identityPersistence:'NOT_PRODUCTION_AUTHORITATIVE' as const,plan};}

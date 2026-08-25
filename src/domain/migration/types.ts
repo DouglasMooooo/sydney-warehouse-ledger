@@ -8,11 +8,17 @@ export type BaselineConfidence='HIGH'|'MEDIUM'|'LOW'|'CONFLICT';
 export type BaselineVerificationStatus='VERIFIED'|'REVIEW_REQUIRED'|'CONFLICT';
 export type BaselineCandidateStatus='READY'|'MISSING_SKU'|'MISSING_LOCATION'|'INVALID_CONDITION'|'SKU_CONFLICT'|'LOCATION_CONFLICT'|'CONDITION_CONFLICT'|'DUPLICATE_SN'|'NO_CURRENT_EVIDENCE'|'LEGACY_ONLY'|'MANUAL_REVIEW';
 export type BaselineWarningCode='HISTORICAL_SKU_MISMATCH'|'HISTORICAL_LOCATION_MISMATCH'|'HISTORICAL_CONDITION_MISMATCH';
+export type BaselineReviewResolution='READY_FOR_APPROVAL'|'REVIEW_REQUIRED'|'UNRESOLVED'|'EXCLUDED';
+export type ReviewDecision='APPROVE'|'REJECT'|'OVERRIDE'|'DEFER';
+export type ReviewFieldSource='PHYSICAL_SN'|'CURRENT_SN_EXACT'|'CURRENT_AGGREGATE'|'PRODUCT_MASTER'|'LEDGER_SUPPORT'|'MANUAL_REVIEW';
+export type ReviewReasonCode='SKU_RESOLVED_BY_AGGREGATE'|'SKU_SUPPORTED_BY_LEGACY_ONLY'|'CONDITION_RESOLVED_BY_AGGREGATE'|'CONDITION_SUPPORTED_BY_LEGACY_ONLY'|'AMBIGUOUS_CURRENT_BUCKET'|'NO_INDEPENDENT_CURRENT_EVIDENCE'|'PRODUCT_MASTER_VALIDATION_ONLY'|'MANUAL_DECISION_REQUIRED';
 export type PhysicalEvidenceQuality='VALID'|'PARTIAL'|'INVALID';
 
 export interface BaselineEvidence {source:BaselineEvidenceSource;authority:EvidenceAuthority;field:'SN'|'SKU'|'DISPLAY_NAME'|'LOCATION'|'STOCK_CONDITION'|'CURRENT_STATE';value:string;confidence:Exclude<BaselineConfidence,'CONFLICT'>}
 export interface MigrationBaselineRecord {baselineId:string;sn:string;canonicalSn:string;sku:string;displayName?:string;location:string;stockCondition:StockCondition;baselineDate:string;evidence:BaselineEvidence[];verificationStatus:BaselineVerificationStatus;reviewIssues:BaselineCandidateStatus[]}
-export interface MigrationBaselineCandidate extends Omit<MigrationBaselineRecord,'stockCondition'>{stockCondition:StockCondition|string;confidence:BaselineConfidence;candidateStatus:BaselineCandidateStatus;physicalEvidenceQuality:PhysicalEvidenceQuality;currentEvidenceScope:CurrentEvidenceScope;blockingIssues:BaselineCandidateStatus[];warnings:BaselineWarningCode[];candidateOnly:true}
+export interface ReviewFieldResolution {value:string;source:ReviewFieldSource;confidence:'HIGH'|'MEDIUM'|'LOW'}
+export interface BaselineReviewState {resolution:BaselineReviewResolution;resolvedFields:{sku?:ReviewFieldResolution;location?:ReviewFieldResolution;stockCondition?:ReviewFieldResolution};unresolvedFields:Array<'sku'|'location'|'stockCondition'>;reviewReasonCodes:ReviewReasonCode[]}
+export interface MigrationBaselineCandidate extends Omit<MigrationBaselineRecord,'stockCondition'>{stockCondition:StockCondition|string;confidence:BaselineConfidence;candidateStatus:BaselineCandidateStatus;physicalEvidenceQuality:PhysicalEvidenceQuality;currentEvidenceScope:CurrentEvidenceScope;blockingIssues:BaselineCandidateStatus[];warnings:BaselineWarningCode[];candidateFingerprint:string;reviewState:BaselineReviewState;candidateOnly:true}
 
 export interface PhysicalSnSource {sn:string;sku?:string;location?:string;stockCondition?:string;sourceRef?:string}
 export interface CurrentInventorySnSource {sn:string;sku:string;location:string;stockCondition:string;displayName?:string;evidenceScope?:'SN_EXACT'|'AGGREGATE_BUCKET'}
@@ -25,6 +31,9 @@ export interface CandidateCutoverDate {date:string;basis:'PHYSICAL_SNAPSHOT'|'MI
 
 export interface MigrationManifest {migrationId:string;cutoverDate:string;createdAt:string;sourceSummary:{physicalCount:number;currentProjectionCount:number;ledgerRecordCount:number};baselineCount:number;verifiedCount:number;reviewRequiredCount:number;conflictCount:number;approvalStatus:'DRAFT'|'REVIEWED'|'APPROVED';approvedBy?:string;approvedAt?:string}
 
-export interface BaselineReplaySimulationInput {candidates:readonly MigrationBaselineCandidate[];movements:readonly InventoryMovement[];policy:CutoverPolicy;physicalTarget:readonly PhysicalSnSource[]}
+export interface BaselineReplaySimulationInput {candidates:readonly MigrationBaselineCandidate[];approvedPreviewCandidates?:readonly MigrationBaselineCandidate[];movements:readonly InventoryMovement[];policy:CutoverPolicy;physicalTarget:readonly PhysicalSnSource[]}
 export interface BaselineSimulationMetrics {replayInStock:number;matched:number;rawMatchRate:number;validEvidenceOnlyMatchRate:number;replayConflicts:number}
-export interface BaselineReplaySimulationReport {baselineCandidates:number;verifiedCandidates:number;reviewRequired:number;candidateConflicts:number;postCutoverMovements:number;simulationScope:'BASELINE_ONLY'|'BASELINE_PLUS_POST_CUTOVER';strict:BaselineSimulationMetrics;permissive:BaselineSimulationMetrics;orderingRiskMovementCount:number;historicalEvidenceCount:number}
+export interface BaselineReplaySimulationReport {baselineCandidates:number;verifiedCandidates:number;reviewRequired:number;candidateConflicts:number;postCutoverMovements:number;simulationScope:'BASELINE_ONLY'|'BASELINE_PLUS_POST_CUTOVER';strict:BaselineSimulationMetrics;permissive:BaselineSimulationMetrics;approvedPreview?:BaselineSimulationMetrics;orderingRiskMovementCount:number;historicalEvidenceCount:number}
+export interface BaselineReviewDecisionRecord {baselineId:string;candidateFingerprint:string;decision:ReviewDecision;reviewer:string;reviewedAt:string;note?:string;override?:{sku:string;location:string;stockCondition:StockCondition}}
+export interface BaselineApprovalGateResult {eligible:boolean;approvedCount:number;rejectedCount:number;deferredCount:number;unresolvedCount:number;blockers:string[];approvedRecords:MigrationBaselineCandidate[];rejectedRecords:MigrationBaselineCandidate[];deferredRecords:MigrationBaselineCandidate[];reviewAudit:BaselineReviewDecisionRecord[]}
+export interface PostCutoverUatPlan {minimumMovementSamples:{move:number;outbound:number;returnRepair:number;repairComplete:number};requiredAssertions:string[]}
