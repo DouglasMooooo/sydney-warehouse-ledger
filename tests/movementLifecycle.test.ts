@@ -168,8 +168,8 @@ test('UI and AI layers do not define Movement semantics independently',()=>{
 });
 
 test('SN replay audit runner is read-only and public movement/SN routes remain absent',()=>{
-  const source=readFileSync('src/scripts/auditSnReplay.ts','utf8');for(const forbidden of ['append','writeExplicitCells','prepareLedgerWrite','executeOperation','applyAdjustment'])assert(!source.includes(forbidden));
-  assert(source.includes('FeishuWarehouseReadAdapter'));assert(source.includes('readRange'));assert(source.includes('writesAttempted:0'));
+  const source=readFileSync('src/scripts/auditSnReplay.ts','utf8'),reader=readFileSync('src/feishu/auditOnlyReader.ts','utf8');for(const forbidden of ['append','writeExplicitCells','prepareLedgerWrite','executeOperation','applyAdjustment'])assert(!`${source}\n${reader}`.includes(forbidden));
+  assert(source.includes('FeishuWarehouseReadAdapter'));assert(source.includes('AuditOnlyPositionalReader'));assert(reader.includes('readRange'));assert(source.includes('writesAttempted:0'));
   assert.equal(existsRoute('app/api/ai/movements/route.ts'),false);assert.equal(existsRoute('app/api/ai/sn/[sn]/route.ts'),false);
 });
 
