@@ -15,13 +15,29 @@ export class FeishuOpenApiClient {
   ) {}
 
   async get<T>(path: string, params: Record<string, string> = {}): Promise<T> {
+    return this.request<T>('GET', path, undefined, params);
+  }
+
+  async post<T>(path: string, body: unknown): Promise<T> {
+    return this.request<T>('POST', path, body);
+  }
+
+  async put<T>(path: string, body: unknown): Promise<T> {
+    return this.request<T>('PUT', path, body);
+  }
+
+  private async request<T>(method: 'GET' | 'POST' | 'PUT', path: string, body?: unknown, params: Record<string, string> = {}): Promise<T> {
     if (!path.startsWith('/open-apis/')) throw new FeishuOpenApiError('Invalid Feishu API path.');
     const url = new URL(path, 'https://open.feishu.cn');
     for (const [key, value] of Object.entries(params)) url.searchParams.set(key, value);
-    const response = await this.fetchImpl(url, { headers: { authorization: `Bearer ${await this.tenantToken()}` } });
-    const body = await parseJson(response);
-    if (!response.ok || body.code !== 0) throw new FeishuOpenApiError(`Feishu read failed (${body.code ?? response.status}).`);
-    return body.data as T;
+    const response = await this.fetchImpl(url, {
+      method,
+      headers: { authorization: `Bearer ${await this.tenantToken()}`, ...(body === undefined ? {} : { 'content-type': 'application/json; charset=utf-8' }) },
+      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+    });
+    const responseBody = await parseJson(response);
+    if (!response.ok || responseBody.code !== 0) throw new FeishuOpenApiError(`Feishu ${method.toLowerCase()} failed (${responseBody.code ?? response.status}).`);
+    return responseBody.data as T;
   }
 
   private async tenantToken(): Promise<string> {

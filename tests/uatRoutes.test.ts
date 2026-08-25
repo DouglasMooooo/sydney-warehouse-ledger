@@ -36,7 +36,7 @@ test('login, unauthorized, and logout UX are explicit and privacy-safe', () => {
   assert(logout.includes("Cache-Control', 'no-store"));
 });
 
-test('READ_ONLY_UAT registers only explicitly allowed read-only warehouse POST routes', () => {
+test('controlled UAT registers only the reviewed preview, query, and write routes', () => {
   assert.doesNotThrow(() => assertReadOnlyRelease({ READ_ONLY_RELEASE: 'true' }));
   assert.throws(() => assertReadOnlyRelease({}), /READ_ONLY_RELEASE=true/);
   const routeFiles = allFiles('app/api/warehouse').filter((path) => path.endsWith('/route.ts'));
@@ -44,10 +44,12 @@ test('READ_ONLY_UAT registers only explicitly allowed read-only warehouse POST r
   assert.deepEqual(postRoutes.sort(), [
     'app/api/warehouse/ai/query/route.ts',
     'app/api/warehouse/exceptions/deep-scan/route.ts',
+    'app/api/warehouse/operations/execute/route.ts',
     'app/api/warehouse/returns/preview/route.ts',
+    'app/api/warehouse/work-orders/confirm/route.ts',
     'app/api/warehouse/work-orders/preview/route.ts',
   ]);
-  for (const forbidden of ['confirm', 'adjustment', 'reservation', 'finalize']) assert(!routeFiles.some((path) => path.toLowerCase().includes(forbidden)));
+  for (const forbidden of ['reservation', 'finalize']) assert(!routeFiles.some((path) => path.toLowerCase().includes(forbidden)));
   assert.equal(existsSync('app/api/warehouse/work-orders/prepare/route.ts'), false);
 });
 
@@ -66,7 +68,8 @@ test('Render UAT hosting is a single Node Docker service with server-only config
   assert(dockerfile.includes('CMD ["npm", "run", "start"'));
   assert(render.includes('runtime: docker'));
   assert(render.includes('healthCheckPath: /api/health'));
-  assert(/key: READ_ONLY_RELEASE\r?\n\s+value: "true"/.test(render));
+  assert(/key: READ_ONLY_RELEASE\r?\n\s+value: "false"/.test(render));
+  assert(/key: CONTROLLED_WRITE_UAT\r?\n\s+value: "true"/.test(render));
   assert(/key: WAREHOUSE_DEV_AUTH\r?\n\s+value: "false"/.test(render));
   assert(!render.includes('NEXT_PUBLIC_'));
   for (const secret of ['FEISHU_APP_SECRET', 'FEISHU_SPREADSHEET_TOKEN', 'FEISHU_APP_ID']) {

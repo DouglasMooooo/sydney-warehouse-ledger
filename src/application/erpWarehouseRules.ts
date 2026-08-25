@@ -6,6 +6,7 @@ export type PreparedStockCondition = Extract<InventoryCandidate['condition'], '�
 export const ERP_WAREHOUSE_RULES: Readonly<Record<string, PreparedStockCondition>> = Object.freeze({
   悉尼良品仓: '维修良品',
   悉尼物料仓: '新机',
+  物料仓: '新机',
 });
 
 export class ErpWarehouseUnsupportedError extends Error {

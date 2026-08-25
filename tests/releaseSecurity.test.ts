@@ -6,11 +6,11 @@ import { resolveWarehouseAuthContext } from '../src/auth/authContext.js';
 import { logOperationalEvent } from '../src/observability/requestLog.js';
 import { assertBusinessMutationAllowed, ReadOnlyReleaseError } from '../src/safety/readOnlyRelease.js';
 
-test('READ_ONLY_RELEASE blocks every future business mutation boundary', () => {
+test('business mutations fail closed except in explicit controlled UAT mode', () => {
   assert.throws(() => assertBusinessMutationAllowed({ READ_ONLY_RELEASE: 'true' }), ReadOnlyReleaseError);
-  assert.doesNotThrow(() => assertBusinessMutationAllowed({ READ_ONLY_RELEASE: 'false' }));
+  assert.throws(() => assertBusinessMutationAllowed({ READ_ONLY_RELEASE: 'false' }), ReadOnlyReleaseError);
+  assert.doesNotThrow(() => assertBusinessMutationAllowed({ READ_ONLY_RELEASE: 'false', CONTROLLED_WRITE_UAT: 'true' }));
   for (const forbidden of [
-    'app/api/warehouse/work-orders/confirm/route.ts',
     'app/api/warehouse/returns/confirm/route.ts',
     'app/api/warehouse/moves/confirm/route.ts',
     'app/api/warehouse/adjustments/route.ts',

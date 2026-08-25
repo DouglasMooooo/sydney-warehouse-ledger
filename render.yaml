@@ -8,6 +8,8 @@ services:
       - key: FEISHU_READ_ADAPTER
         value: openapi
       - key: READ_ONLY_RELEASE
+        value: "false"
+      - key: CONTROLLED_WRITE_UAT
         value: "true"
       - key: WAREHOUSE_DEV_AUTH
         value: "false"

@@ -148,7 +148,7 @@ export async function prepareWorkOrderPreview(
     qty,
     fromLocation: recommendation.location,
     erpWarehouse,
-    stockCondition: recommendation.condition,
+    stockCondition: requiredCondition,
   });
   if (!prepared.ok) {
     errors.push({ code: 'INVALID_DATA', message: prepared.errors.map((error) => error.code).join(', ') });
@@ -166,7 +166,7 @@ export async function prepareWorkOrderPreview(
     qty,
     erpWarehouse,
     fromLocation: recommendation.location,
-    stockCondition: recommendation.condition,
+    stockCondition: requiredCondition,
   };
   if (recommendation.container) row.container = recommendation.container;
   warnings.push('Pickup Code 仅为预览，未被预留，确认前可能变化。');

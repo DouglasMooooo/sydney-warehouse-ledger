@@ -107,6 +107,7 @@ test('Prepared preview recommends only a real inventory candidate and performs z
 test('Prepared stock condition is a deterministic server rule, not an AI or client choice', async () => {
   assert.equal(preparedConditionForWarehouse('悉尼良品仓'), '维修良品');
   assert.equal(preparedConditionForWarehouse('悉尼物料仓'), '新机');
+  assert.equal(preparedConditionForWarehouse('物料仓'), '新机');
   assert.equal(preparedConditionForWarehouse('  悉尼良品仓  '), '维修良品');
   assert.throws(() => preparedConditionForWarehouse('UNKNOWN'), ErpWarehouseUnsupportedError);
   assert.throws(() => preparedConditionForWarehouse('   '), ErpWarehouseUnsupportedError);

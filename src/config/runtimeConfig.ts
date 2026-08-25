@@ -1,6 +1,7 @@
-import { assertReadOnlyRelease } from '../safety/readOnlyRelease.js';
+import { assertBusinessMutationAllowed, assertReadOnlyRelease, isControlledWriteUat } from '../safety/readOnlyRelease.js';
 
 export const UAT_MODE = 'READ_ONLY_UAT' as const;
+export const CONTROLLED_WRITE_UAT_MODE = 'CONTROLLED_WRITE_UAT' as const;
 
 const AUTH_KEYS = ['FEISHU_APP_ID', 'FEISHU_APP_SECRET', 'FEISHU_OAUTH_REDIRECT_URI', 'WAREHOUSE_SESSION_SECRET'] as const;
 const OPEN_API_KEYS = ['FEISHU_APP_ID', 'FEISHU_APP_SECRET', 'FEISHU_SPREADSHEET_TOKEN', 'FEISHU_MAIN_SHEET_ID', 'FEISHU_CURRENT_INVENTORY_SHEET_ID'] as const;
@@ -8,7 +9,7 @@ const REQUIRED_ROLE_KEYS = ['WAREHOUSE_OPERATOR_USERS', 'WAREHOUSE_READ_ONLY_USE
 const OPTIONAL_ROLE_KEYS = ['WAREHOUSE_ADMIN_USERS'] as const;
 
 export interface UatRuntimeConfig {
-  mode: typeof UAT_MODE;
+  mode: typeof UAT_MODE | typeof CONTROLLED_WRITE_UAT_MODE;
   version: string;
   oauthRedirectUri: string;
 }
@@ -48,13 +49,15 @@ export function validateUatRuntimeConfig(env: Readonly<Record<string, string | u
   for (const key of required) if (!env[key]?.trim()) invalid.push(key);
   for (const key of OPTIONAL_ROLE_KEYS) if (!Object.prototype.hasOwnProperty.call(env, key)) invalid.push(`${key}(config-key)`);
   if (env.FEISHU_READ_ADAPTER !== 'openapi') invalid.push('FEISHU_READ_ADAPTER=openapi');
-  if (env.READ_ONLY_RELEASE !== 'true') invalid.push('READ_ONLY_RELEASE=true');
+  const readOnly = env.READ_ONLY_RELEASE === 'true';
+  const controlledWrite = isControlledWriteUat(env);
+  if (!readOnly && !controlledWrite) invalid.push('READ_ONLY_RELEASE=true or CONTROLLED_WRITE_UAT=true');
   if ((env.WAREHOUSE_SESSION_SECRET?.trim().length ?? 0) < 32) invalid.push('WAREHOUSE_SESSION_SECRET(minimum-length)');
   const redirect = safeUrl(env.FEISHU_OAUTH_REDIRECT_URI);
   if (!redirect || redirect.protocol !== 'https:') invalid.push('FEISHU_OAUTH_REDIRECT_URI(https)');
   if (invalid.length) throw new RuntimeConfigError([...new Set(invalid)]);
-  assertReadOnlyRelease(env);
-  return { mode: UAT_MODE, version: env.APP_VERSION!.trim(), oauthRedirectUri: redirect!.toString() };
+  if (controlledWrite) assertBusinessMutationAllowed(env); else assertReadOnlyRelease(env);
+  return { mode: controlledWrite ? CONTROLLED_WRITE_UAT_MODE : UAT_MODE, version: env.APP_VERSION!.trim(), oauthRedirectUri: redirect!.toString() };
 }
 
 function safeUrl(value: string | undefined): URL | undefined {

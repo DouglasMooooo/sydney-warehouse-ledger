@@ -14,6 +14,12 @@ test('UAT runtime config accepts only complete HTTPS OpenAPI read-only configura
   assert.deepEqual(inspectUatRuntimeConfig(valid), { readOnlyRelease: true, authConfigured: true, openApiConfigured: true, rolesConfigured: true, versionConfigured: true });
 });
 
+test('UAT runtime config accepts explicit controlled write mode only with read-only disabled', () => {
+  const writable = { ...valid, READ_ONLY_RELEASE: 'false', CONTROLLED_WRITE_UAT: 'true' };
+  assert.equal(validateUatRuntimeConfig(writable).mode, 'CONTROLLED_WRITE_UAT');
+  assert.throws(() => validateUatRuntimeConfig({ ...writable, CONTROLLED_WRITE_UAT: 'false' }), RuntimeConfigError);
+});
+
 test('UAT roles require operator and read-only users but allow an explicitly empty admin list', () => {
   const noAdmin = { ...valid, WAREHOUSE_ADMIN_USERS: '' };
   assert.equal(inspectUatRuntimeConfig(noAdmin).rolesConfigured, true);
@@ -35,7 +41,7 @@ test('runtime config fails closed without read-only flag and never includes secr
     assert(error instanceof RuntimeConfigError);
     assert(!error.message.includes('do-not-leak'));
     assert(!error.message.includes('short'));
-    assert(error.missingOrInvalid.includes('READ_ONLY_RELEASE=true'));
+    assert(error.missingOrInvalid.includes('READ_ONLY_RELEASE=true or CONTROLLED_WRITE_UAT=true'));
     return true;
   });
 });
