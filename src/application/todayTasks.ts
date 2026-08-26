@@ -1,4 +1,5 @@
 import type { BusinessDate } from '../ledger/businessDate.js';
+import { reversedOutboundLedgerRow } from './outboundReversalMarker.js';
 
 export type OperationalTaskType = 'TODAY_PREPARED' | 'AWAITING_PICKUP' | 'TODAY_OUTBOUND' | 'TODAY_RETURN';
 export type DerivedTaskState = 'PREPARED_TODAY' | 'AWAITING_PICKUP_DERIVED' | 'OUTBOUND_TODAY' | 'RETURNED_TODAY';
@@ -58,6 +59,7 @@ export interface TodayTaskSnapshot {
 }
 
 export function deriveTodayTasks(rows: OperationalLedgerRow[], asOf: BusinessDate): TodayTaskSnapshot {
+  const activeOutbound = activeOutboundRows(rows);
   return {
     businessDate: asOf,
     todayPrepared: groupTasks(
@@ -66,7 +68,7 @@ export function deriveTodayTasks(rows: OperationalLedgerRow[], asOf: BusinessDat
     ),
     awaitingPickup: deriveAwaitingPickup(rows),
     todayOutbound: groupTasks(
-      rows.filter((row) => row.action === '出库' && row.outboundDate === asOf),
+      activeOutbound.filter((row) => row.outboundDate === asOf),
       'TODAY_OUTBOUND', 'OUTBOUND_TODAY', 'pickup-fallback-sh',
     ),
     todayReturns: rows
@@ -86,6 +88,7 @@ export function deriveTodayTasks(rows: OperationalLedgerRow[], asOf: BusinessDat
 }
 
 function deriveAwaitingPickup(rows: OperationalLedgerRow[]): OperationalTask[] {
+  const activeOutboundLedgerRows = new Set(activeOutboundRows(rows).map((row) => row.ledgerRow));
   const aliases = new Map<string, string>();
   const groups = new Map<string, { prepared: OperationalLedgerRow[]; balances: Map<string, number> }>();
   for (const row of rows) {
@@ -103,7 +106,7 @@ function deriveAwaitingPickup(rows: OperationalLedgerRow[]): OperationalTask[] {
       groups.set(key, group);
       continue;
     }
-    if (row.action !== '出库' || !row.sku || row.qty === undefined || row.qty <= 0) continue;
+    if (row.action !== '出库' || !activeOutboundLedgerRows.has(row.ledgerRow) || !row.sku || row.qty === undefined || row.qty <= 0) continue;
     const key = (pickupAlias && aliases.get(pickupAlias)) ?? (shAlias && aliases.get(shAlias));
     if (!key) continue;
     const group = groups.get(key);
@@ -123,6 +126,15 @@ function deriveAwaitingPickup(rows: OperationalLedgerRow[]): OperationalTask[] {
       }
       return taskFromRows(remaining, 'AWAITING_PICKUP', 'AWAITING_PICKUP_DERIVED');
     });
+}
+
+/** Excludes outbound rows that were restored by an audited append-only reversal. */
+export function activeOutboundRows(rows: OperationalLedgerRow[]): OperationalLedgerRow[] {
+  const reversed = new Set(rows
+    .filter((row) => row.action === '库存调增')
+    .map((row) => reversedOutboundLedgerRow(row.remark))
+    .filter((row): row is number => row !== undefined));
+  return rows.filter((row) => row.action === '出库' && !reversed.has(row.ledgerRow));
 }
 
 function groupTasks(

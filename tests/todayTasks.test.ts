@@ -43,6 +43,18 @@ test('today outbound uses Pickup task grain with SH fallback', () => {
   assert.equal(deriveTodayTasks(rows, TODAY).todayOutbound.length, 2);
 });
 
+test('audited outbound reversal removes the shipment from active outbound and reopens its prepared task', () => {
+  const rows = [
+    { ...base, sh: 'SH-1', sn: 'SN1', qty: 1 },
+    { ...base, ledgerRow: 3, sh: 'SH-1', sn: 'SN1', action: '出库', qty: 1, outboundDate: TODAY },
+    { ...base, ledgerRow: 4, sh: 'SH-1', sn: 'SN1', action: '库存调增', qty: 1, toLocation: 'R1', remark: 'Outbound reversal · SH-1 · OUTBOUND_REVERSAL:3' },
+  ];
+  const snapshot = deriveTodayTasks(rows, TODAY);
+  assert.equal(snapshot.todayOutbound.length, 0);
+  assert.equal(snapshot.awaitingPickup.length, 1);
+  assert.equal(snapshot.awaitingPickup[0]?.details[0]?.sn, 'SN1');
+});
+
 test('today return top metric grain is Qty and keeps SN rows', () => {
   const rows = [{ ...base, action: '退回维修', qty: 2, sn: 'SN1', toLocation: 'REPAIR-01' }];
   const snapshot = deriveTodayTasks(rows, TODAY);

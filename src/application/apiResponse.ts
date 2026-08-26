@@ -33,6 +33,10 @@ export function clientSafeError(error: unknown): ApiErrorContract {
     SN_NOT_IN_CURRENT_INVENTORY: '至少一个 SN 不在当前库存中，请检查后重试。',
     REPAIR_COMPLETE_REQUIRES_PENDING_REPAIR: '至少一个 SN 当前不是待修状态，不能完成维修。',
     MOVE_SOURCE_EQUALS_TARGET: '目标库位与至少一台机器的当前库位相同。',
+    INVALID_SH_REFERENCE: '请输入有效的 SH 单号，例如 SH-2608-00184741。',
+    OUTBOUND_NOT_FOUND_OR_ALREADY_REVERSED: '未找到可回撤的出库记录，或该 SH 已经完成回撤。',
+    OUTBOUND_REVERSAL_LIMIT_EXCEEDED: '单次最多回撤 100 条出库流水。',
+    OUTBOUND_REVERSAL_STATE_CONFLICT: '至少一台机器的当前状态已变化，不能回撤；请刷新后检查。',
   };
   for (const [code, safeMessage] of Object.entries(workflowErrors)) {
     if (message.includes(code)) return { code, message: safeMessage };

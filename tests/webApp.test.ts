@@ -252,4 +252,8 @@ test('business workflow UI derives ledger actions instead of exposing an action 
   assert(prepared.includes('先打印取货标签，再去现场找货'));
   assert(execute.includes("'action' in body"));
   assert(execute.includes('body.workflow'));
+  const reversal = readFileSync('app/(warehouse)/tasks/outbound-reversal-client.tsx', 'utf8');
+  assert(reversal.includes('按 SH 单号回撤出库'));
+  assert(reversal.includes("fetch('/api/warehouse/outbound/reversal'"));
+  assert(reversal.includes('确认回撤'));
 });

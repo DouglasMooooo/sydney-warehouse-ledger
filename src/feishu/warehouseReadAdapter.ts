@@ -1,7 +1,7 @@
 import { STOCK_CONDITIONS, type StockCondition } from '../config/controlledValues.js';
 import type { BusinessDate } from '../ledger/businessDate.js';
 import type {
-  CurrentSerializedInventory, DashboardSnapshot, InventoryCandidate, PreparedTransaction, ProductRecord, WarehouseReadPort,
+  CurrentSerializedInventory, DashboardSnapshot, InventoryCandidate, OutboundTransaction, PreparedTransaction, ProductRecord, WarehouseReadPort,
 } from '../application/contracts.js';
 import { deriveTodayTasks, type OperationalLedgerRow, type TodayTaskSnapshot } from '../application/todayTasks.js';
 import { formatLocationSummary, summarizeLocations, type LocationInventoryRecord, type LocationSummary } from '../application/locationSummary.js';
@@ -23,6 +23,7 @@ import { DeterministicMovementProjectionService } from '../domain/movement/movem
 import { DefaultMigrationPolicy, FEISHU_OPERATIONAL_SOURCE_BATCHES } from '../domain/movement/migrationPolicy.js';
 import { DeterministicSnLifecycleReplayService } from '../domain/sn/snLifecycleReplay.js';
 import type { CurrentSnState } from '../domain/sn/types.js';
+import { reversedOutboundLedgerRow } from '../application/outboundReversalMarker.js';
 
 const MAIN = {
   date: 0, outboundDate: 1, action: 2, sh: 3, pickup: 4, container: 5,
@@ -200,6 +201,33 @@ export class FeishuWarehouseReadAdapter implements WarehouseReadPort, MovementRe
     return { shNo: text(exact[MAIN.sh]), pickupCode: text(exact[MAIN.pickup]), sku: text(exact[MAIN.sku]),
       location: text(exact[MAIN.fromLocation]), erpWarehouse: text(exact[MAIN.erpWarehouse]), stockCondition: condition,
       ...(text(exact[MAIN.container]) ? { containerCode: text(exact[MAIN.container]) } : {}) };
+  }
+
+  async findReversibleOutboundBySh(rawShNo: string): Promise<OutboundTransaction[]> {
+    const shNo = rawShNo.trim().toUpperCase();
+    const rows = (await this.readMain()).data.slice(1);
+    const reversedRows = new Set(rows
+      .filter((row) => text(row[MAIN.action]) === '库存调增')
+      .map((row) => reversedOutboundLedgerRow(text(row[MAIN.remark])))
+      .filter((row): row is number => row !== undefined));
+    return rows.flatMap((row, index): OutboundTransaction[] => {
+      const ledgerRow = index + 2;
+      if (reversedRows.has(ledgerRow) || text(row[MAIN.action]) !== '出库' || text(row[MAIN.sh]).toUpperCase() !== shNo) return [];
+      const condition = text(row[MAIN.stockCondition]) as StockCondition;
+      const qty = parseSourceNumber(row[MAIN.qty]);
+      const sku = text(row[MAIN.sku]);
+      const fromLocation = text(row[MAIN.fromLocation]);
+      if (!sku || !fromLocation || qty.kind !== 'valid' || qty.value <= 0 || !STOCK_CONDITIONS.includes(condition)) return [];
+      const item: OutboundTransaction = {
+        ledgerRow, outboundDate: businessDate(row[MAIN.outboundDate]), shNo: text(row[MAIN.sh]), sku,
+        qty: qty.value, fromLocation, stockCondition: condition,
+      };
+      if (text(row[MAIN.pickup])) item.pickupCode = text(row[MAIN.pickup]);
+      if (text(row[MAIN.container])) item.containerCode = text(row[MAIN.container]);
+      if (text(row[MAIN.sn])) item.sn = normalizeSn(text(row[MAIN.sn]));
+      if (text(row[MAIN.erpWarehouse])) item.erpWarehouse = text(row[MAIN.erpWarehouse]);
+      return [item];
+    });
   }
 
   async readTodayTasks(asOf: BusinessDate): Promise<TodayTaskSnapshot> {

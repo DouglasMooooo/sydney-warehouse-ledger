@@ -3,6 +3,7 @@ import { warehouseReadAdapterFromEnv } from '../../../src/feishu/warehouseReadAd
 import { todayInSydney } from '../../../src/ledger/businessDate';
 import type { OperationalTask } from '../../../src/application/todayTasks';
 import { BatchOutboundClient } from './batch-outbound-client';
+import { OutboundReversalClient } from './outbound-reversal-client';
 
 export const dynamic = 'force-dynamic';
 
@@ -10,7 +11,7 @@ export default async function TasksPage() {
   try {
     await authenticateWarehousePage('TASK_READ');
     const snapshot = await warehouseReadAdapterFromEnv().readTodayTasks(todayInSydney());
-    return <><PageHeader /><BatchOutboundClient tasks={snapshot.awaitingPickup} businessDate={snapshot.businessDate} /><div className="section-grid">
+    return <><PageHeader /><BatchOutboundClient tasks={snapshot.awaitingPickup} businessDate={snapshot.businessDate} /><OutboundReversalClient businessDate={snapshot.businessDate} /><div className="section-grid">
       <TaskSection title="今日备货工单 · SH COUNT" tasks={snapshot.todayPrepared} />
       <TaskSection title="待取货（派生）· TASK COUNT" tasks={snapshot.awaitingPickup} />
       <TaskSection title="今日已出库 · TASK COUNT" tasks={snapshot.todayOutbound} />

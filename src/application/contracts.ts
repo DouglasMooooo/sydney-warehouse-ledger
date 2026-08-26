@@ -62,6 +62,20 @@ export interface PreparedTransaction {
   stockCondition: InventoryCandidate['condition'];
 }
 
+export interface OutboundTransaction {
+  ledgerRow: number;
+  outboundDate: string;
+  shNo: string;
+  pickupCode?: string;
+  sku: string;
+  sn?: string;
+  qty: number;
+  fromLocation: string;
+  containerCode?: string;
+  erpWarehouse?: string;
+  stockCondition: InventoryCandidate['condition'];
+}
+
 export interface ProductRecord extends ProductIdentity {}
 
 export interface DashboardSnapshot {
@@ -111,6 +125,8 @@ export interface WarehouseReadPort {
   findCurrentSerializedInventory?(sn: string): Promise<CurrentSerializedInventory | undefined>;
   findCurrentSerializedInventoryBatch?(sns: string[]): Promise<CurrentSerializedInventory[]>;
   findPreparedByReference?(reference: string, sn: string): Promise<PreparedTransaction | undefined>;
+  /** Active outbound rows for an SH that have not already received an audited reversal. */
+  findReversibleOutboundBySh?(shNo: string): Promise<OutboundTransaction[]>;
 }
 
 export interface InventoryQueryService {

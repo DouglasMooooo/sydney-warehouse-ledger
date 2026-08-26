@@ -1,6 +1,6 @@
 import type { BusinessDate } from '../ledger/businessDate.js';
 import type { InventoryCandidate } from './contracts.js';
-import type { OperationalLedgerRow } from './todayTasks.js';
+import { activeOutboundRows, type OperationalLedgerRow } from './todayTasks.js';
 
 export interface WeeklyWarehouseReport {
   asOf: BusinessDate;
@@ -37,7 +37,7 @@ export function deriveWeeklyWarehouseReport(rows: OperationalLedgerRow[], invent
   const weekEnd = addDays(weekStart, 6);
   const inWeek = (date: string) => date >= weekStart && date <= weekEnd;
   const qty = (items: OperationalLedgerRow[]) => items.reduce((sum, row) => sum + (row.qty ?? 0), 0);
-  const shipped = rows.filter(row => row.action === '出库' && inWeek(row.outboundDate));
+  const shipped = activeOutboundRows(rows).filter(row => inWeek(row.outboundDate));
   const returned = rows.filter(row => row.action === '退回维修' && inWeek(row.date));
   const repaired = rows.filter(row => row.action === '库存调增' && row.stockCondition === '维修良品' && inWeek(row.date) && (row.remark ?? '').includes('维修完成'));
   const inbound = rows.filter(row => row.action === '入库' && row.stockCondition === '新机' && inWeek(row.date));
@@ -70,7 +70,7 @@ export function deriveWeeklyWarehouseReport(rows: OperationalLedgerRow[], invent
     byModel,
     notes: [
       '周区间按 Sydney 周一至周日计算；允许选择周内任意日期。',
-      '发货只统计 Action=出库，并使用实际出库日；备货不扣库存。',
+      '发货统计未被受控回撤的 Action=出库，并使用实际出库日；备货不扣库存。',
       '维修完成只统计系统生成且备注含“维修完成”的维修良品调增流水。',
       '当前库存为实时快照；固定历史周数据不会被当前台账反算覆盖。',
       ...(manual.note ? [`维修周数据备注：${manual.note}`] : []),
