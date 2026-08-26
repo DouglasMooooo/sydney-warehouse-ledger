@@ -24,6 +24,8 @@ tmp/
 artifacts/migration-baseline-candidates.json
 artifacts/migration-baseline-review.csv
 artifacts/migration-baseline-approved-preview.json
+artifacts/migration-baseline-review-decisions.json
+artifacts/migration-baseline-review-bulk-filled.csv
 sheet_work/
 xlsx_processing/
 .phase1/

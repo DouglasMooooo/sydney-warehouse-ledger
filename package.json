@@ -13,6 +13,7 @@
     "audit:sn-replay": "tsx src/scripts/auditSnReplay.ts",
     "migration:baseline-plan": "tsx src/scripts/generateMigrationBaseline.ts",
     "migration:baseline-approve": "tsx src/scripts/approveMigrationBaseline.ts",
+    "migration:baseline-bulk-approve": "tsx src/scripts/bulkApproveMigrationBaseline.ts",
     "audit:post-cutover": "tsx src/scripts/auditPostCutover.ts",
     "formula:dry-run": "tsx src/scripts/dryRunFormulaRepair.ts",
     "formula:apply": "tsx src/scripts/applyFormulaRepair.ts",

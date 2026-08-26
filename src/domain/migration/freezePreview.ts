@@ -1,0 +1,9 @@
+import { createHash } from 'node:crypto';
+import { BASELINE_REVIEW_POLICY_VERSION } from './bulkBaselineApproval.js';
+import type { BaselineApprovalGateResult, BaselineFreezePreview } from './types.js';
+
+export function createBaselineFreezePreview(gate:BaselineApprovalGateResult,cutoverDate:string,reviewBatchFingerprints:readonly string[]):BaselineFreezePreview|undefined {
+  if(!gate.eligible)return undefined;
+  const audit=[...gate.reviewAudit].sort((a,b)=>(a.decisionId??a.baselineId).localeCompare(b.decisionId??b.baselineId)),approved=[...gate.approvedRecords].sort((a,b)=>a.baselineId.localeCompare(b.baselineId)),excluded=[...gate.rejectedRecords].sort((a,b)=>a.baselineId.localeCompare(b.baselineId)),payload={cutoverDate,approved,rejectedBaselineIds:excluded.map(item=>item.baselineId),reviewDecisionIds:audit.map(item=>item.decisionId??`${item.baselineId}:${item.candidateFingerprint}:${item.decision}`),candidateFingerprints:[...gate.reviewAudit].map(item=>item.candidateFingerprint).sort(),reviewPolicyVersion:BASELINE_REVIEW_POLICY_VERSION},baselineFreezeFingerprint=createHash('sha256').update(JSON.stringify(payload)).digest('hex'),total=gate.candidateCount,overrideApproved=approved.filter(item=>item.decision==='OVERRIDE').length;
+  return {mode:'DRY_RUN_ONLY',writesAttempted:0,baselineFreezeId:`FREEZE-${cutoverDate.replaceAll('-','')}-${baselineFreezeFingerprint.slice(0,12)}`,baselineFreezeFingerprint,cutoverDate,approvedCount:approved.length,rejectedCount:excluded.length,approvedRecords:approved,excludedRecords:excluded,reviewSummary:{total,approved:approved.length,overrideApproved,rejected:excluded.length,deferred:gate.deferredCount,pending:gate.pendingDecisionCount,completionRate:total?((approved.length+excluded.length)/total):0},reviewBatchFingerprints:[...reviewBatchFingerprints].sort(),reviewPolicyVersion:BASELINE_REVIEW_POLICY_VERSION};
+}
