@@ -1,0 +1,5 @@
+export type DeploymentMode='LOCAL_DEV'|'FEISHU_UAT'|'PRODUCTION';
+export interface FeatureFlags {warehouseOperations:boolean;aiReadQueries:boolean;migrationStatusRead:boolean;migrationReview:boolean;migrationBulkApproval:boolean;migrationFreezePreview:boolean;migrationPersistence:boolean;authoritativeSnApi:boolean;movementApi:boolean;movementRegistryWrite:boolean}
+
+export function getDeploymentMode(env:Readonly<Record<string,string|undefined>>=process.env):DeploymentMode{const value=env.DEPLOYMENT_MODE?.trim();return value==='FEISHU_UAT'||value==='PRODUCTION'?value:'LOCAL_DEV';}
+export function getFeatureFlags(env:Readonly<Record<string,string|undefined>>=process.env):FeatureFlags{const mode=getDeploymentMode(env),local=mode==='LOCAL_DEV';return {warehouseOperations:true,aiReadQueries:true,migrationStatusRead:true,migrationReview:local,migrationBulkApproval:local,migrationFreezePreview:local,migrationPersistence:false,authoritativeSnApi:false,movementApi:false,movementRegistryWrite:false};}

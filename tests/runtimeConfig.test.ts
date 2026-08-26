@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { inspectUatRuntimeConfig, RuntimeConfigError, validateUatRuntimeConfig } from '../src/config/runtimeConfig.js';
+import { getDeploymentMode, getFeatureFlags } from '../src/config/featureFlags.js';
 
 const valid = {
   FEISHU_READ_ADAPTER: 'openapi', FEISHU_APP_ID: 'app', FEISHU_APP_SECRET: 'secret', FEISHU_SPREADSHEET_TOKEN: 'sheet',
@@ -45,3 +46,5 @@ test('runtime config fails closed without read-only flag and never includes secr
     return true;
   });
 });
+
+test('Feishu UAT feature policy enables normal operations but keeps migration and authoritative APIs disabled',()=>{const flags=getFeatureFlags({...valid,DEPLOYMENT_MODE:'FEISHU_UAT'});assert.equal(getDeploymentMode({DEPLOYMENT_MODE:'FEISHU_UAT'}),'FEISHU_UAT');assert.equal(flags.warehouseOperations,true);assert.equal(flags.aiReadQueries,true);assert.equal(flags.migrationStatusRead,true);assert.equal(flags.migrationBulkApproval,false);assert.equal(flags.migrationPersistence,false);assert.equal(flags.authoritativeSnApi,false);assert.equal(flags.movementRegistryWrite,false);});
