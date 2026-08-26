@@ -235,6 +235,8 @@ test('prepared location recommendation prioritizes sufficient FLEX-01 inventory'
 test('business workflow UI derives ledger actions instead of exposing an action selector', () => {
   const prepared = readFileSync('app/(warehouse)/work-orders/preview-client.tsx', 'utf8');
   const operations = readFileSync('app/(warehouse)/moves/operations-client.tsx', 'utf8');
+  const batchTransfer = readFileSync('app/(warehouse)/moves/batch-transfer-workspace.tsx', 'utf8');
+  const matrix = readFileSync('app/(warehouse)/warehouse-layout/warehouse-matrix.tsx', 'utf8');
   const execute = readFileSync('app/api/warehouse/operations/execute/route.ts', 'utf8');
   assert(prepared.includes('action="备货"'));
   assert(!prepared.includes('onActionChange'));
@@ -242,6 +244,12 @@ test('business workflow UI derives ledger actions instead of exposing an action 
   assert(operations.includes("fetch('/api/warehouse/operations/preview'"));
   assert(operations.includes('ADJUSTMENT_REASONS'));
   assert(operations.includes('OPENING_BALANCE'));
+  assert(operations.includes('BatchTransferWorkspace'));
+  assert(batchTransfer.includes('上传或粘贴 SN'));
+  assert(batchTransfer.includes("selectionMode=\"target\""));
+  assert(matrix.includes("selectionMode==='target'"));
+  assert(prepared.indexOf('work-order-label-bar') < prepared.indexOf('console-table-wrap'));
+  assert(prepared.includes('先打印取货标签，再去现场找货'));
   assert(execute.includes("'action' in body"));
   assert(execute.includes('body.workflow'));
 });

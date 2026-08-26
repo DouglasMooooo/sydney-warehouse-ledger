@@ -6,11 +6,13 @@ import { ArrowRight, ArrowsLeftRight, CheckCircle, ClipboardText, Package, Shiel
 import { ACTION_RULES, ADJUSTMENT_REASONS, type InventoryWorkflow, type InventoryWorkflowInput, type InventoryWorkflowPreview } from '../../../src/application/inventoryActionEngine';
 import { STOCK_CONDITIONS } from '../../../src/config/controlledValues';
 import type { ApiResponse } from '../../../src/application/apiResponse';
+import { BatchTransferWorkspace } from './batch-transfer-workspace';
+import type { MatrixLocation } from '../warehouse-layout/warehouse-matrix';
 
 const DAILY: InventoryWorkflow[] = ['OUTBOUND', 'INBOUND', 'MOVE', 'REPAIR_COMPLETE'];
 const ADJUSTMENTS: InventoryWorkflow[] = ['ADJUST_INCREASE', 'ADJUST_DECREASE'];
 
-export function OperationsClient({ businessDate, canAdjust }: { businessDate: string; canAdjust: boolean }) {
+export function OperationsClient({ businessDate, canAdjust, locations }: { businessDate: string; canAdjust: boolean; locations: MatrixLocation[] }) {
   const [workflow, setWorkflow] = useState<InventoryWorkflow>('MOVE');
   const [preview, setPreview] = useState<InventoryWorkflowPreview>();
   const [pending, setPending] = useState<InventoryWorkflowInput>();
@@ -46,14 +48,13 @@ export function OperationsClient({ businessDate, canAdjust }: { businessDate: st
     } catch (reason) { setState('error'); setMessage(reason instanceof Error ? reason.message : '写入失败'); }
   }
 
+  const sidebar = <OperationsSidebar workflow={workflow} canAdjust={canAdjust} choose={choose}/>;
+  if (workflow === 'MOVE' || workflow === 'REPAIR_COMPLETE') {
+    return <div className="workflow-workbench batch-mode">{sidebar}<BatchTransferWorkspace key={workflow} workflow={workflow} businessDate={businessDate} locations={locations}/></div>;
+  }
+
   return <div className="workflow-workbench">
-    <aside className="workflow-sidebar">
-      <WorkflowLink href="/work-orders" label="工单备货" detail="导入工单，系统生成备货动作" />
-      <WorkflowLink href="/returns" label="坏机接收" detail="批量 SN，默认进入 REPAIR-01" />
-      <WorkflowGroup title="日常作业" workflows={DAILY} selected={workflow} onSelect={choose} />
-      <WorkflowGroup title="库存修正" workflows={ADJUSTMENTS} selected={workflow} onSelect={choose} locked={!canAdjust} />
-      <div className="workflow-group"><h3>管理员</h3><button className={workflow === 'OPENING_BALANCE' ? 'active admin' : 'admin'} disabled={!canAdjust} onClick={() => choose('OPENING_BALANCE')}><ShieldWarning size={17}/><span>期初库存<small>{canAdjust ? '初始化专用' : '需要管理员权限'}</small></span></button></div>
-    </aside>
+    {sidebar}
 
     <main className="workflow-form-area">
       <header className="workflow-title"><div><span className="workflow-kicker">BUSINESS WORKFLOW</span><h3>{rule.label}</h3><p>{workflowDescription(workflow)}</p></div><div className="system-action"><span>系统库存动作</span><strong>{rule.ledgerAction}</strong><small>{effectLabel(rule.inventoryEffect)}</small></div></header>
@@ -82,8 +83,18 @@ export function OperationsClient({ businessDate, canAdjust }: { businessDate: st
   </div>;
 }
 
+function OperationsSidebar({workflow,canAdjust,choose}:{workflow:InventoryWorkflow;canAdjust:boolean;choose:(value:InventoryWorkflow)=>void}) {
+  return <aside className="workflow-sidebar">
+    <WorkflowLink href="/work-orders" label="工单备货" detail="导入工单，系统生成备货动作" />
+    <WorkflowLink href="/returns" label="坏机接收" detail="批量 SN，默认进入 REPAIR-01" />
+    <WorkflowGroup title="日常作业" workflows={DAILY} selected={workflow} onSelect={choose} />
+    <WorkflowGroup title="库存修正" workflows={ADJUSTMENTS} selected={workflow} onSelect={choose} locked={!canAdjust} />
+    <div className="workflow-group"><h3>管理员</h3><button type="button" className={workflow === 'OPENING_BALANCE' ? 'active admin' : 'admin'} disabled={!canAdjust} onClick={() => choose('OPENING_BALANCE')}><ShieldWarning size={17}/><span>期初库存<small>{canAdjust ? '初始化专用' : '需要管理员权限'}</small></span></button></div>
+  </aside>;
+}
+
 function WorkflowGroup({title,workflows,selected,onSelect,locked=false}:{title:string;workflows:InventoryWorkflow[];selected:InventoryWorkflow;onSelect:(value:InventoryWorkflow)=>void;locked?:boolean}) {
-  return <div className="workflow-group"><h3>{title}</h3>{workflows.map((item)=><button key={item} className={selected===item?'active':''} disabled={locked} onClick={()=>onSelect(item)}><Package size={17}/><span>{ACTION_RULES[item].label}<small>{locked?'需要管理员权限':effectLabel(ACTION_RULES[item].inventoryEffect)}</small></span></button>)}</div>;
+  return <div className="workflow-group"><h3>{title}</h3>{workflows.map((item)=><button type="button" key={item} className={selected===item?'active':''} disabled={locked} onClick={()=>onSelect(item)}><Package size={17}/><span>{ACTION_RULES[item].label}<small>{locked?'需要管理员权限':effectLabel(ACTION_RULES[item].inventoryEffect)}</small></span></button>)}</div>;
 }
 
 function WorkflowLink({href,label,detail}:{href:string;label:string;detail:string}) { return <Link className="workflow-link" href={href}><Wrench size={17}/><span>{label}<small>{detail}</small></span><ArrowRight size={15}/></Link>; }

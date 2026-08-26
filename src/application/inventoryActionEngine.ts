@@ -137,6 +137,7 @@ export async function prepareInventoryWorkflow(input: InventoryWorkflowInput, po
       const current = await currentBySn(port, required(sn, 'MISSING_SN'));
       if (current.stockCondition !== '待修' || current.currentState !== 'REPAIR') throw new TypeError('REPAIR_COMPLETE_REQUIRES_PENDING_REPAIR');
       const target = required(input.toLocation, 'MISSING_TARGET_LOCATION');
+      if (current.location === target) throw new TypeError('MOVE_SOURCE_EQUALS_TARGET');
       const repairedSn = toRepairedGoodSn(sn);
       before = { sku: current.sku, location: current.location, qty: 1, stockCondition: '待修' };
       after = { sku: current.sku, location: target, qty: 1, stockCondition: '维修良品' };

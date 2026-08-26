@@ -44,6 +44,8 @@ test('controlled UAT registers only the reviewed preview, query, and write route
   assert.deepEqual(postRoutes.sort(), [
     'app/api/warehouse/ai/query/route.ts',
     'app/api/warehouse/exceptions/deep-scan/route.ts',
+    'app/api/warehouse/operations/batch/execute/route.ts',
+    'app/api/warehouse/operations/batch/preview/route.ts',
     'app/api/warehouse/operations/execute/route.ts',
     'app/api/warehouse/operations/preview/route.ts',
     'app/api/warehouse/outbound/batch/route.ts',

@@ -18,7 +18,7 @@ import type { VerifiedSnMapping } from '../snResolver/types.js';
 import type { MaterialOption, SnOperationalState, SnResolverContext } from '../application/badMachineReceive.js';
 import { deriveWeeklyWarehouseReport, type WeeklyManualMetrics, type WeeklyWarehouseReport } from '../application/weeklyReport.js';
 import type { MovementQuery, MovementReadPort } from '../application/queries/movementQueryService.js';
-import type { OperationalLedgerRecord } from '../domain/movement/types.js';
+import type { InventoryMovement, OperationalLedgerRecord } from '../domain/movement/types.js';
 import { DeterministicMovementProjectionService } from '../domain/movement/movementProjection.js';
 import { DefaultMigrationPolicy, FEISHU_OPERATIONAL_SOURCE_BATCHES } from '../domain/movement/migrationPolicy.js';
 import { DeterministicSnLifecycleReplayService } from '../domain/sn/snLifecycleReplay.js';
@@ -175,18 +175,17 @@ export class FeishuWarehouseReadAdapter implements WarehouseReadPort, MovementRe
   async findCurrentSerializedInventory(rawSn: string): Promise<CurrentSerializedInventory | undefined> {
     const sn = normalizeSn(rawSn);
     const projected=MOVEMENT_PROJECTOR.projectLedgerRecords(await this.readLedgerRecords({sn})).movements;
-    const replayed=new DeterministicSnLifecycleReplayService().replay(sn,projected),state=replayed.currentState;
-    if(state.status==='IN_STOCK'){
-      const movement=projected.find(item=>item.movementId===state.lastMovementId);
-      return {sn:state.sn,sku:state.sku,location:state.location,stockCondition:state.stockCondition,currentState:legacyOperationalState(state),
-        ...(movement?.containerCode?{containerCode:movement.containerCode}:{})};
-    }
-    if(state.status==='OUTBOUND'){
-      const movement=projected.find(item=>item.movementId===state.lastMovementId),condition=movement?.stockConditionBefore;
-      if(!state.sku||!movement?.fromLocation||!condition)return undefined;
-      return {sn:state.sn,sku:state.sku,location:movement.fromLocation,stockCondition:condition,currentState:'OUTBOUND',...(movement.containerCode?{containerCode:movement.containerCode}:{})};
-    }
-    return undefined;
+    return currentSerializedFromMovements(sn,projected);
+  }
+
+  async findCurrentSerializedInventoryBatch(rawSns: string[]): Promise<CurrentSerializedInventory[]> {
+    const sns=[...new Set(rawSns.map(normalizeSn).filter(Boolean))];
+    const records=await this.readLedgerRecords();
+    return sns.flatMap((sn)=>{
+      const projected=MOVEMENT_PROJECTOR.projectLedgerRecords(records.filter((record)=>movementRecordMatches(record,{sn}))).movements;
+      const current=currentSerializedFromMovements(sn,projected);
+      return current?[current]:[];
+    });
   }
 
   async findPreparedByReference(reference: string, rawSn: string): Promise<PreparedTransaction | undefined> {
@@ -324,6 +323,21 @@ export class FeishuWarehouseReadAdapter implements WarehouseReadPort, MovementRe
     const location = columnIndex(table, ['库位编码（R-排-列-L/M/R）', '库位编码', 'Location']);
     return new Set(table.data.map((row) => text(row[location])).filter(Boolean));
   }
+}
+
+function currentSerializedFromMovements(sn:string,projected:readonly InventoryMovement[]):CurrentSerializedInventory|undefined{
+  const replayed=new DeterministicSnLifecycleReplayService().replay(sn,projected),state=replayed.currentState;
+  if(state.status==='IN_STOCK'){
+    const movement=projected.find(item=>item.movementId===state.lastMovementId);
+    return {sn:state.sn,sku:state.sku,location:state.location,stockCondition:state.stockCondition,currentState:legacyOperationalState(state),
+      ...(movement?.containerCode?{containerCode:movement.containerCode}:{})};
+  }
+  if(state.status==='OUTBOUND'){
+    const movement=projected.find(item=>item.movementId===state.lastMovementId),condition=movement?.stockConditionBefore;
+    if(!state.sku||!movement?.fromLocation||!condition)return undefined;
+    return {sn:state.sn,sku:state.sku,location:movement.fromLocation,stockCondition:condition,currentState:'OUTBOUND',...(movement.containerCode?{containerCode:movement.containerCode}:{})};
+  }
+  return undefined;
 }
 
 function legacyOperationalState(state:CurrentSnState,lastLifecycleAction?:string):Exclude<SnOperationalState['currentState'],'NOT_FOUND'>{

@@ -109,6 +109,7 @@ export interface WarehouseReadPort {
   ): Promise<InventoryCandidate[]>;
   readPickupCodes(): Promise<string[]>;
   findCurrentSerializedInventory?(sn: string): Promise<CurrentSerializedInventory | undefined>;
+  findCurrentSerializedInventoryBatch?(sns: string[]): Promise<CurrentSerializedInventory[]>;
   findPreparedByReference?(reference: string, sn: string): Promise<PreparedTransaction | undefined>;
 }
 
