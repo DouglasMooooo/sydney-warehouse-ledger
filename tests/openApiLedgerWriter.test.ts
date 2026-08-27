@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { createMovementIdentity, OpenApiLedgerWriter } from '../src/feishu/openApiLedgerWriter.js';
+import { createMovementIdentity, nextAppendBusinessRow, OpenApiLedgerWriter, parseSystemLedgerMarker } from '../src/feishu/openApiLedgerWriter.js';
 import { prepareLedgerWrite } from '../src/ledger/typedWrite.js';
 import type { WarehouseSheetReader } from '../src/feishu/sheetReader.js';
 import type { FeishuOpenApiClient } from '../src/feishu/openApiClient.js';
@@ -33,15 +33,27 @@ test('OpenAPI writer preserves numeric date formatting and protected formulas en
 test('writer fails closed on header mismatch and treats an existing idempotency marker as already committed', async () => {
   const input={date:'2026-08-25',action:'入库' as const,sku:'00123',qty:1,toLocation:'R1-1-1-L',stockCondition:'新机' as const};
   const prepared=prepareLedgerWrite(input,false); assert(prepared.ok);
-  const identity=createMovementIdentity(prepared.normalized!);
-  const existing=Array(29).fill(''); existing[21]=`[SYSTEM_NATIVE] movementId=${identity.movementId}; idempotencyKey=${identity.idempotencyKey}; createdBy=u1; source=WAREHOUSE_APP`;
+  const commandId='CMD-00000000-0000-4000-8000-000000000001';
+  const identity=createMovementIdentity(prepared.normalized!,commandId,0);
+  const existing=Array(29).fill(''); existing[21]=`[SYSTEM_NATIVE] commandId=${identity.commandId}; movementId=${identity.movementId}; idempotencyKey=${identity.idempotencyKey}; sourceFingerprint=${identity.sourceFingerprint}; createdBy=u1; source=WAREHOUSE_APP`;
   let posts=0;
   const client={async get(){return{valueRange:{values:[Array(29).fill('')]}};},async post(){posts+=1;return{};},async put(){return{};}} as unknown as FeishuOpenApiClient;
   const reader:WarehouseSheetReader={async readTable(input){return{name:'main',range:'A1:AC2',columns:headers(),data:input.noHeader?[headers(),existing]:[existing],dtypes:{}};},async healthCheck(){return true;}};
-  const result=await new OpenApiLedgerWriter('token','main',client,reader).append([input],{createdBy:'u1'});
+  const result=await new OpenApiLedgerWriter('token','main',client,reader).append([input],{createdBy:'u1',commandId});
   assert.equal(result.status,'ALREADY_COMMITTED'); assert.equal(posts,0); assert.deepEqual(result.rows,[2]);
   const invalidReader:WarehouseSheetReader={async readTable(){return{name:'main',range:'A1',columns:[],data:[],dtypes:{}};},async healthCheck(){return true;}};
-  await assert.rejects(()=>new OpenApiLedgerWriter('token','main',client,invalidReader).append([input],{createdBy:'u1'}),/OPERATIONAL_LEDGER_SCHEMA_MISMATCH/);
+  await assert.rejects(()=>new OpenApiLedgerWriter('token','main',client,invalidReader).append([input],{createdBy:'u1',commandId}),/OPERATIONAL_LEDGER_SCHEMA_MISMATCH/);
+});
+
+test('true append ordering keeps historical gaps untouched and command identities separate equal business commands', () => {
+  const rows=Array.from({length:102},()=>Array(29).fill(''));
+  rows[99]![2]='入库'; rows[101]![2]='入库';
+  assert.equal(nextAppendBusinessRow(rows),103);
+  const prepared=prepareLedgerWrite({date:'2026-08-25',action:'入库',sku:'00123',qty:1,toLocation:'R1-1-1-L',stockCondition:'新机'},false); assert(prepared.ok);
+  const one=createMovementIdentity(prepared.normalized!,'CMD-00000000-0000-4000-8000-000000000011',0);
+  const two=createMovementIdentity(prepared.normalized!,'CMD-00000000-0000-4000-8000-000000000012',0);
+  assert.notEqual(one.idempotencyKey,two.idempotencyKey); assert.equal(one.sourceFingerprint,two.sourceFingerprint);
+  assert.equal(parseSystemLedgerMarker(`[SYSTEM_NATIVE] commandId=${one.commandId}; idempotencyKey=${one.idempotencyKey}; sourceFingerprint=${one.sourceFingerprint}`).commandId,one.commandId);
 });
 
 function headers(): string[] { const row=Array(29).fill(''); Object.assign(row,{0:'日期',1:'实际出库日',2:'动作',3:'ERP SH单号',4:'取货码',5:'容器码',6:'料号',9:'机器唯一码（SN）',10:'数量',11:'来源库位',12:'目标库位',13:'ERP仓库选择',15:'库存属性',21:'备注'}); return row; }

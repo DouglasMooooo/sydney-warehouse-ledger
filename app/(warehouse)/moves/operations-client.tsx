@@ -33,7 +33,7 @@ export function OperationsClient({ businessDate, canAdjust, locations }: { busin
       const response = await fetch('/api/warehouse/operations/preview', { method:'POST', headers:{'content-type':'application/json'}, body:JSON.stringify(payload) });
       const result = await response.json() as ApiResponse<InventoryWorkflowPreview>;
       if (!result.ok) throw new Error(`${result.error.code} · ${result.error.message}`);
-      setPreview(result.data); setPending(payload); setState('ready');
+      setPreview(result.data); setPending({ ...payload, commandId: result.data.commandId }); setState('ready');
     } catch (reason) { setState('error'); setMessage(reason instanceof Error ? reason.message : '预览失败'); }
   }
 
@@ -42,9 +42,9 @@ export function OperationsClient({ businessDate, canAdjust, locations }: { busin
     setState('writing'); setMessage('');
     try {
       const response = await fetch('/api/warehouse/operations/execute', { method:'POST', headers:{'content-type':'application/json'}, body:JSON.stringify(pending) });
-      const result = await response.json() as ApiResponse<{rows:number[]}>;
+      const result = await response.json() as ApiResponse<{rows:number[];status?:string}>;
       if (!result.ok) throw new Error(`${result.error.code} · ${result.error.message}`);
-      setState('done'); setMessage(`已写入并复核第 ${result.data.rows.join(', ')} 行`);
+      setState('done'); setMessage(result.data.status==='ALREADY_COMMITTED'?'该操作此前已经记录，无需重复提交。':`已写入并复核第 ${result.data.rows.join(', ')} 行`);
     } catch (reason) { setState('error'); setMessage(reason instanceof Error ? reason.message : '写入失败'); }
   }
 
@@ -71,7 +71,7 @@ export function OperationsClient({ businessDate, canAdjust, locations }: { busin
     <aside className="workflow-preview-panel">
       <h3>确认预览</h3>
       {!preview ? <div className="preview-placeholder"><ArrowsLeftRight size={32}/><strong>尚未生成预览</strong><span>填写左侧业务字段后，系统会展示 Before → Transaction → After。</span></div> : <>
-        <div className="preview-effect"><span>库存影响</span><strong>{effectLabel(preview.inventoryEffect)}</strong></div>
+        <div className="preview-effect"><span>库存影响</span><strong>{effectLabel(preview.inventoryEffect)}</strong></div><p className="field-note">操作编号 {preview.commandId}</p>
         {preview.before && <PreviewState title="Before" value={preview.before} />}
         <div className="preview-transaction"><span>Transaction</span><strong>{preview.label}</strong><small>Ledger · {preview.ledgerAction}</small><small>{preview.rows.length} 条新增流水</small></div>
         {preview.after && <PreviewState title="After" value={preview.after} />}

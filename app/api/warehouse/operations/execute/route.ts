@@ -14,12 +14,13 @@ export async function POST(request: Request) {
   try {
     const body = await request.json() as ControlledOperationInput;
     if ('action' in body || !INVENTORY_WORKFLOWS.includes(body.workflow)) throw new TypeError('UNSUPPORTED_INVENTORY_WORKFLOW');
+    if (!body.commandId) throw new TypeError('MISSING_COMMAND_ID');
     const permission: WarehousePermission = body.workflow === 'MOVE' || body.workflow === 'REPAIR_COMPLETE' ? 'MOVE_CONFIRM'
       : body.workflow === 'ADJUST_INCREASE' || body.workflow === 'ADJUST_DECREASE' || body.workflow === 'OPENING_BALANCE'
         ? 'ADJUSTMENT_MANAGE' : body.workflow === 'RETURN_REPAIR' ? 'RETURN_CONFIRM' : 'WORK_ORDER_CONFIRM';
     const auth = authenticateWarehouseRequest(request, permission);
     expensiveOperationLimiter.check(`write:${auth.user.userId}`, 8, 60_000);
-    const result = await executeControlledLedgerOperation(body, warehouseReadAdapterFromEnv(), openApiLedgerWriterFromEnv(), process.env, { createdBy: auth.user.userId });
+    const result = await executeControlledLedgerOperation(body, warehouseReadAdapterFromEnv(), openApiLedgerWriterFromEnv(), process.env, { createdBy: auth.user.userId, commandId: body.commandId });
     return NextResponse.json(apiSuccess(result));
   } catch (error) {
     const safe = clientSafeError(error);

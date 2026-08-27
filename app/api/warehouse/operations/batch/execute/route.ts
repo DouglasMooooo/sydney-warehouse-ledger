@@ -11,9 +11,10 @@ export const runtime = 'nodejs';
 export async function POST(request: Request) {
   try {
     const body = await request.json() as ControlledBatchTransferInput;
+    if (!body.commandId) throw new TypeError('MISSING_COMMAND_ID');
     const auth = authenticateWarehouseRequest(request, 'MOVE_CONFIRM');
     expensiveOperationLimiter.check(`batch-transfer-write:${auth.user.userId}`, 5, 60_000);
-    return NextResponse.json(apiSuccess(await executeControlledBatchTransfer(body, warehouseReadAdapterFromEnv(), openApiLedgerWriterFromEnv(), process.env, { createdBy: auth.user.userId })));
+    return NextResponse.json(apiSuccess(await executeControlledBatchTransfer(body, warehouseReadAdapterFromEnv(), openApiLedgerWriterFromEnv(), process.env, { createdBy: auth.user.userId, commandId: body.commandId })));
   } catch (error) {
     const safe = clientSafeError(error);
     console.error('Batch transfer write failed', serverSafeErrorSummary(error));

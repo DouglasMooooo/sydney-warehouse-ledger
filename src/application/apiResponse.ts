@@ -44,6 +44,10 @@ export function clientSafeError(error: unknown): ApiErrorContract {
     OPERATIONAL_LEDGER_SCHEMA_MISMATCH: '飞书库存流水表的表头与已批准的台账结构不一致，已阻止写入。',
     PARTIAL_IDEMPOTENCY_CONFLICT: '该操作存在未完整确认的写入记录，已阻止重复提交，请联系管理员核对操作记录。',
     DUPLICATE_MOVEMENT_COMMAND: '本次确认包含重复的业务动作，已阻止写入。',
+    LEDGER_APPEND_CONTENTION: '当前有其他用户正在写入台账，请稍后重新确认。',
+    IDEMPOTENCY_PAYLOAD_MISMATCH: '该确认编号已用于另一项操作，请重新生成预览。',
+    MISSING_COMMAND_ID: '当前预览已失效，请重新生成预览。',
+    INVALID_COMMAND_ID: '当前预览编号无效，请重新生成预览。',
   };
   for (const [code, safeMessage] of Object.entries(workflowErrors)) {
     if (message.includes(code)) return { code, message: safeMessage };

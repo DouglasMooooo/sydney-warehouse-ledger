@@ -75,7 +75,7 @@ export function BatchTransferWorkspace({ workflow, businessDate, locations }: {
   async function confirmWrite() {
     if (!preview) return;
     setStage('writing'); setMessage('');
-    const input: ControlledBatchTransferInput = { workflow, date, toLocation, sns: parsed.sns };
+    const input: ControlledBatchTransferInput = { workflow, date, toLocation, sns: parsed.sns, commandId: preview.commandId };
     try {
       const response = await fetch('/api/warehouse/operations/batch/execute', { method:'POST', headers:{'content-type':'application/json'}, body:JSON.stringify(input) });
       const result = await response.json() as ApiResponse<{ rows: number[] }>;
@@ -115,7 +115,7 @@ export function BatchTransferWorkspace({ workflow, businessDate, locations }: {
     <div className="batch-preview-card">
       <div className="batch-card-title"><span>03</span><div><h4>确认预览</h4><p>写入前逐台显示来源、目标和库存属性变化。</p></div></div>
       {!preview ? <div className="batch-preview-empty"><ArrowRight size={26}/><strong>准备好后生成批量预览</strong><span>不会修改历史行；确认时只新增流水并执行写后复核。</span></div> : <>
-        <div className="batch-preview-summary"><strong>{preview.items.length} 台</strong><span>目标 {preview.toLocation}</span><span>{preview.totalRows} 条新增流水</span></div>
+        <div className="batch-preview-summary"><strong>{preview.items.length} 台</strong><span>目标 {preview.toLocation}</span><span>{preview.totalRows} 条新增流水</span><small>操作编号 {preview.commandId}</small></div>
         <div className="batch-preview-table-wrap"><table className="batch-preview-table"><thead><tr><th>SN</th><th>来源</th><th>库存属性</th><th>目标</th><th>结果</th></tr></thead><tbody>{preview.items.map((item)=><tr key={item.sn}><td><b>{item.sn}</b>{workflow==='REPAIR_COMPLETE'&&<small>→ {String(item.preview.rows.at(-1)?.sn ?? '')}</small>}</td><td>{item.preview.before?.location}</td><td>{item.preview.before?.stockCondition} → {item.preview.after?.stockCondition}</td><td>{item.preview.after?.location}</td><td><span className="row-status ok">可执行</span></td></tr>)}</tbody></table></div>
       </>}
       {stage==='error'&&<div className="inline-alert danger"><WarningCircle size={18}/>{message}</div>}

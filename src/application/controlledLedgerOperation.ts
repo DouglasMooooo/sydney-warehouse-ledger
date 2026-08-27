@@ -2,11 +2,13 @@ import type { WarehouseReadPort } from './contracts.js';
 import { assertBusinessMutationAllowed } from '../safety/readOnlyRelease.js';
 import type { ConfirmedOpenApiWrite, OpenApiLedgerWriter, WarehouseLedgerWriteContext } from '../feishu/openApiLedgerWriter.js';
 import { prepareInventoryWorkflow, type InventoryWorkflowInput, type InventoryWorkflowPreview } from './inventoryActionEngine.js';
+import { randomUUID } from 'node:crypto';
 
 export const CONTROLLED_UAT_ACTIONS = ['入库', '出库', '移库', '库存调增', '库存调减'] as const;
 export type ControlledOperationInput = InventoryWorkflowInput;
 
 export interface ControlledBatchTransferInput {
+  commandId?: string;
   workflow: 'MOVE' | 'REPAIR_COMPLETE';
   date: string;
   toLocation: string;
@@ -14,6 +16,7 @@ export interface ControlledBatchTransferInput {
 }
 
 export interface ControlledBatchTransferPreview {
+  commandId: string;
   workflow: ControlledBatchTransferInput['workflow'];
   label: string;
   toLocation: string;
@@ -56,6 +59,7 @@ export async function previewControlledBatchTransfer(
     preview: await prepareInventoryWorkflow({ workflow: input.workflow, date: input.date, sn, toLocation: input.toLocation }, effectivePort),
   })));
   return {
+    commandId: input.commandId?.trim() || `CMD-${randomUUID()}`,
     workflow: input.workflow,
     label: input.workflow === 'MOVE' ? '批量移库' : '批量维修完成',
     toLocation: input.toLocation.trim(),
@@ -74,7 +78,8 @@ export async function executeControlledBatchTransfer(
 ): Promise<ConfirmedOpenApiWrite> {
   assertBusinessMutationAllowed(env);
   const preview = await previewControlledBatchTransfer(input, port);
-  return writer.append(preview.items.flatMap((item) => item.preview.rows), context);
+  const writeContext: WarehouseLedgerWriteContext = { ...(context ?? { createdBy: 'UNKNOWN_OPERATOR' }), ...(input.commandId ? { commandId: input.commandId } : {}) };
+  return writer.append(preview.items.flatMap((item) => item.preview.rows), writeContext);
 }
 
 function normalizeBatchSns(values: string[], workflow: ControlledBatchTransferInput['workflow']): string[] {
