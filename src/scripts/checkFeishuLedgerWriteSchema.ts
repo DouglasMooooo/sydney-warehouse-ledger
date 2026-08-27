@@ -2,6 +2,7 @@ import { assertMainLedgerSchema } from '../config/ledgerSchema.js';
 import { requiredEnv } from '../feishu/client.js';
 import { openApiClientFromEnv } from '../feishu/openApiClient.js';
 import { FeishuOpenApiWarehouseSheetReader } from '../feishu/sheetReader.js';
+import { verifyCurrentInventoryBaseline } from '../application/currentInventoryBaselineVerifier.js';
 
 const token = requiredEnv('FEISHU_SPREADSHEET_TOKEN');
 const sheetId = requiredEnv('FEISHU_MAIN_SHEET_ID');
@@ -9,3 +10,13 @@ const reader = new FeishuOpenApiWarehouseSheetReader(token, openApiClientFromEnv
 const table = await reader.readTable({ sheetId, range: 'A1:AC1' });
 assertMainLedgerSchema(table.columns);
 console.log('operationalLedgerSchema: PASS');
+const baseline = await reader.readTable({ sheetId: requiredEnv('FEISHU_CURRENT_INVENTORY_SHEET_ID') });
+const baselineCheck = verifyCurrentInventoryBaseline(baseline, process.env.CURRENT_INVENTORY_AUTHORITY_MODE as 'PHYSICAL_SNAPSHOT' | 'EXPLICIT_BASELINE');
+if (!baselineCheck.valid) throw new Error(baselineCheck.code);
+console.log('baselineSheetReadable: PASS');
+console.log('baselineFrozenValues: PASS');
+console.log('baselineFormulaCheck: PASS');
+await reader.readTable({ sheetName: '库位维护', range: 'A1:A2' });
+console.log('locationMasterReadable: PASS');
+await reader.readTable({ sheetName: '产品库存维护', range: 'A1:B2' });
+console.log('productMasterReadable: PASS');

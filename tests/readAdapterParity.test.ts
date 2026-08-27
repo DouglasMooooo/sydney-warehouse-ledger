@@ -9,7 +9,7 @@ import { compareOpenApiLogicalReads } from '../src/uat/openApiParity.js';
 
 const mainHeader = Array.from({ length: 16 }, (_, index) => `C${index + 1}`);
 const mainRow: Array<string | number | boolean | null> = Array(16).fill('');
-Object.assign(mainRow, { 0: '2026-08-20', 2: '备货', 3: 'SH-1', 4: 'SYD-00001', 6: '00123', 7: 'MODEL-A', 9: '60HD103064PM133', 10: 1, 11: 'R1', 15: '维修良品', 21: '[SYSTEM_NATIVE] commandId=CMD-00000000-0000-4000-8000-000000000001; movementId=MOV-TEST-0001; idempotencyKey=IDEM-TEST; sourceFingerprint=SRC-TEST' });
+Object.assign(mainRow, { 0: '2026-08-20', 2: '备货', 3: 'SH-1', 4: 'SYD-00001', 6: '00123', 7: 'MODEL-A', 9: '60HD103064PM133', 10: 1, 11: 'R1', 15: '维修良品', 21: '[SYSTEM_NATIVE] commandId=CMD-00000000-0000-4000-8000-000000000001; movementId=MOV-TEST-0001; idempotencyKey=IDEM-TEST; sourceFingerprint=SRC-TEST; createdAt=2026-08-20T10:00:00+10:00; source=WAREHOUSE_APP' });
 
 const tables: Record<string, TypedSheetData> = {
   main: typed('主表', mainHeader, [mainHeader, mainRow]),
