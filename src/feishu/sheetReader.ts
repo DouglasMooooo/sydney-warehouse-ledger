@@ -31,6 +31,11 @@ export class FeishuOpenApiWarehouseSheetReader implements WarehouseSheetReader {
       { valueRenderOption: 'UnformattedValue' },
     );
     const rows = trimRows(data.valueRange?.values ?? []);
+    const formulaData = await this.client.get<{ valueRange?: { values?: unknown[][] } }>(
+      `/open-apis/sheets/v2/spreadsheets/${encodeURIComponent(this.spreadsheetToken)}/values/${encodeURIComponent(`${sheet.sheet_id}!${range}`)}`,
+      { valueRenderOption: 'Formula' },
+    );
+    const formulaRows = trimRows(formulaData.valueRange?.values ?? []);
     const width = Math.max(0, ...rows.map((row) => row.length));
     const normalized = rows.map((row) => Array.from({ length: width }, (_, index) => scalar(row[index])));
     if (input.noHeader) {
@@ -39,7 +44,8 @@ export class FeishuOpenApiWarehouseSheetReader implements WarehouseSheetReader {
     const header = normalized[0] ?? [];
     const body = normalized.slice(1);
     const columns = Array.from({ length: width }, (_, index) => String(header[index] ?? columnName(index + 1)));
-    return { name: sheet.title, range, columns, data: body, dtypes: inferDtypes(body, width, columns) };
+    const formulas = Object.fromEntries(columns.map((column, index) => [column, formulaRows.slice(1).map((row) => typeof row[index] === 'string' && row[index]!.startsWith('=') ? row[index] as string : '')]));
+    return { name: sheet.title, range, columns, data: body, dtypes: inferDtypes(body, width, columns), formulas };
   }
 
   async healthCheck(): Promise<boolean> {

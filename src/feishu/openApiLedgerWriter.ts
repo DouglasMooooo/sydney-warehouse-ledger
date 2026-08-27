@@ -103,9 +103,10 @@ function appendSystemMarker(remark: string, identity: MovementIdentity, createdB
   return `${humanRemark ? `${humanRemark}\n` : ''}[SYSTEM_NATIVE] commandId=${identity.commandId}; movementId=${identity.movementId}; idempotencyKey=${identity.idempotencyKey}; sourceFingerprint=${identity.sourceFingerprint}; createdBy=${operator}; createdAt=${new Date().toISOString()}; source=WAREHOUSE_APP`;
 }
 
-export function parseSystemLedgerMarker(remark: unknown): Partial<MovementIdentity> {
+export interface SystemLedgerMarker extends Partial<MovementIdentity> { createdAt?: string; createdBy?: string; source?: string }
+export function parseSystemLedgerMarker(remark: unknown): SystemLedgerMarker {
   const marker = /\[SYSTEM_NATIVE\]\s*([^\n]*)/.exec(String(remark ?? ''))?.[1] ?? '';
-  return Object.fromEntries([...marker.matchAll(/\b(commandId|movementId|idempotencyKey|sourceFingerprint)=([^;\s]+)/g)].map((match) => [match[1]!, match[2]!])) as Partial<MovementIdentity>;
+  return Object.fromEntries([...marker.matchAll(/\b(commandId|movementId|idempotencyKey|sourceFingerprint|createdAt|createdBy|source)=([^;\s]+)/g)].map((match) => [match[1]!, match[2]!])) as SystemLedgerMarker;
 }
 
 function resolveCommittedRows(rows: readonly unknown[][], identities: readonly MovementIdentity[]): { kind: 'none' } | { kind: 'all'; rows: number[] } | { kind: 'partial' } | { kind: 'mismatch' } {

@@ -28,7 +28,7 @@ services:
         sync: false
       - key: CURRENT_INVENTORY_AUTHORITY_MODE
         sync: false
-      - key: CURRENT_INVENTORY_BASELINE_EFFECTIVE_DATE
+      - key: CURRENT_INVENTORY_BASELINE_EFFECTIVE_AT
         sync: false
       - key: FEISHU_OAUTH_REDIRECT_URI
         sync: false

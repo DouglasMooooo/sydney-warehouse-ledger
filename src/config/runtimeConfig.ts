@@ -42,7 +42,7 @@ export function inspectUatRuntimeConfig(env: Readonly<Record<string, string | un
     openApiConfigured: env.FEISHU_READ_ADAPTER === 'openapi' && OPEN_API_KEYS.every(present),
     rolesConfigured: OPTIONAL_ROLE_KEYS.every(configured) && REQUIRED_ROLE_KEYS.every(present),
     versionConfigured: present('APP_VERSION'),
-    currentInventoryAuthorityConfigured: INVENTORY_AUTHORITY_MODES.includes(env.CURRENT_INVENTORY_AUTHORITY_MODE as typeof INVENTORY_AUTHORITY_MODES[number]) && /^\d{4}-\d{2}-\d{2}$/.test(env.CURRENT_INVENTORY_BASELINE_EFFECTIVE_DATE?.trim() ?? ''),
+    currentInventoryAuthorityConfigured: INVENTORY_AUTHORITY_MODES.includes(env.CURRENT_INVENTORY_AUTHORITY_MODE as typeof INVENTORY_AUTHORITY_MODES[number]) && isOffsetTimestamp(env.CURRENT_INVENTORY_BASELINE_EFFECTIVE_AT?.trim() ?? ''),
   };
 }
 
@@ -53,7 +53,7 @@ export function validateUatRuntimeConfig(env: Readonly<Record<string, string | u
   for (const key of OPTIONAL_ROLE_KEYS) if (!Object.prototype.hasOwnProperty.call(env, key)) invalid.push(`${key}(config-key)`);
   if (env.FEISHU_READ_ADAPTER !== 'openapi') invalid.push('FEISHU_READ_ADAPTER=openapi');
   if (!INVENTORY_AUTHORITY_MODES.includes(env.CURRENT_INVENTORY_AUTHORITY_MODE as typeof INVENTORY_AUTHORITY_MODES[number])) invalid.push('CURRENT_INVENTORY_AUTHORITY_MODE=PHYSICAL_SNAPSHOT or EXPLICIT_BASELINE');
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(env.CURRENT_INVENTORY_BASELINE_EFFECTIVE_DATE?.trim() ?? '')) invalid.push('CURRENT_INVENTORY_BASELINE_EFFECTIVE_DATE=yyyy-mm-dd');
+  if (!isOffsetTimestamp(env.CURRENT_INVENTORY_BASELINE_EFFECTIVE_AT?.trim() ?? '')) invalid.push('CURRENT_INVENTORY_BASELINE_EFFECTIVE_AT=ISO-8601-with-offset');
   const readOnly = env.READ_ONLY_RELEASE === 'true';
   const controlledWrite = isControlledWriteUat(env);
   if (!readOnly && !controlledWrite) invalid.push('READ_ONLY_RELEASE=true or CONTROLLED_WRITE_UAT=true');
@@ -68,3 +68,4 @@ export function validateUatRuntimeConfig(env: Readonly<Record<string, string | u
 function safeUrl(value: string | undefined): URL | undefined {
   try { return value?.trim() ? new URL(value) : undefined; } catch { return undefined; }
 }
+function isOffsetTimestamp(value: string): boolean { return /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?(?:Z|[+-]\d{2}:\d{2})$/.test(value) && Number.isFinite(Date.parse(value)); }

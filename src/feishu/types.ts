@@ -50,6 +50,7 @@ export interface TypedSheetData {
   data: Array<Array<string | number | boolean | null>>;
   dtypes: Record<string, string>;
   formats?: Record<string, string>;
+  formulas?: Record<string, string[]>;
 }
 
 export interface TableGetData {

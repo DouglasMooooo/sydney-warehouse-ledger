@@ -8,13 +8,13 @@ export type CurrentInventorySourceType = 'PHYSICAL_SNAPSHOT' | 'EXPLICIT_BASELIN
 
 export interface InventoryBaselineSnapshot {
   sourceType: Extract<CurrentInventorySourceType, 'PHYSICAL_SNAPSHOT' | 'EXPLICIT_BASELINE'>;
-  effectiveDate: string;
+  effectiveAt: string;
   records: readonly InventoryCandidate[];
 }
 
 export interface CurrentInventorySnapshot {
   authority: InventoryAuthority;
-  baseline: Pick<InventoryBaselineSnapshot, 'sourceType' | 'effectiveDate'>;
+  baseline: Pick<InventoryBaselineSnapshot, 'sourceType' | 'effectiveAt'>;
   records: InventoryCandidate[];
   serializedStates: ReadonlyMap<string, ReturnType<DeterministicSnLifecycleReplayService['replay']>['currentState']>;
 }
@@ -24,8 +24,8 @@ export class CurrentInventoryAuthorityError extends Error {
   constructor() { super('CURRENT_INVENTORY_AUTHORITY_UNVERIFIED'); }
 }
 
-export function assertAuthoritativeBaseline(sourceType: CurrentInventorySourceType, effectiveDate: string): asserts sourceType is InventoryBaselineSnapshot['sourceType'] {
-  if ((sourceType !== 'PHYSICAL_SNAPSHOT' && sourceType !== 'EXPLICIT_BASELINE') || !/^\d{4}-\d{2}-\d{2}$/.test(effectiveDate)) throw new CurrentInventoryAuthorityError();
+export function assertAuthoritativeBaseline(sourceType: CurrentInventorySourceType, effectiveAt: string): asserts sourceType is InventoryBaselineSnapshot['sourceType'] {
+  if ((sourceType !== 'PHYSICAL_SNAPSHOT' && sourceType !== 'EXPLICIT_BASELINE') || !isOffsetTimestamp(effectiveAt)) throw new CurrentInventoryAuthorityError();
 }
 
 /**
@@ -34,13 +34,13 @@ export function assertAuthoritativeBaseline(sourceType: CurrentInventorySourceTy
  */
 export class CurrentInventoryProjectionService {
   project(baseline: InventoryBaselineSnapshot, movements: readonly InventoryMovement[]): CurrentInventorySnapshot {
-    assertAuthoritativeBaseline(baseline.sourceType, baseline.effectiveDate);
+    assertAuthoritativeBaseline(baseline.sourceType, baseline.effectiveAt);
     const aggregate = new Map<string, InventoryCandidate>();
     const serializedBaseline = baseline.records.filter((item) => item.sn);
     for (const item of baseline.records.filter((item) => !item.sn)) add(aggregate, item, item.availableQty);
     const serialMovements = [
-      ...serializedBaseline.map((item, index) => baselineMovement(item, index, baseline.effectiveDate)),
-      ...movements.filter((item) => item.replayEligibility === 'CURRENT_STATE' && item.businessDate > baseline.effectiveDate && Boolean(item.sn)),
+      ...serializedBaseline.map((item, index) => baselineMovement(item, index, baseline.effectiveAt)),
+      ...movements.filter((item) => afterBaseline(item, baseline.effectiveAt) && Boolean(item.sn)),
     ];
     const replay = new DeterministicSnLifecycleReplayService();
     const serialKeys = new Set(serialMovements.map((item) => canonical(item.sn ?? '')).filter(Boolean));
@@ -49,8 +49,8 @@ export class CurrentInventoryProjectionService {
     for (const state of serializedStates.values()) if (state.status === 'IN_STOCK') {
       add(aggregate, { sn: state.sn, sku: state.sku, ...(state.displayName ? { displayName: state.displayName } : {}), location: state.location, availableQty: 1, condition: state.stockCondition }, 1);
     }
-    for (const movement of movements.filter((item) => item.replayEligibility === 'CURRENT_STATE' && item.businessDate > baseline.effectiveDate && !item.sn)) applyAggregateMovement(aggregate, movement);
-    return { authority: 'SYSTEM_NATIVE_PROJECTION', baseline: { sourceType: baseline.sourceType, effectiveDate: baseline.effectiveDate }, records: [...aggregate.values()].filter((item) => item.availableQty > 0).sort(compare), serializedStates };
+    for (const movement of movements.filter((item) => afterBaseline(item, baseline.effectiveAt) && !item.sn)) applyAggregateMovement(aggregate, movement);
+    return { authority: 'SYSTEM_NATIVE_PROJECTION', baseline: { sourceType: baseline.sourceType, effectiveAt: baseline.effectiveAt }, records: [...aggregate.values()].filter((item) => item.availableQty > 0).sort(compare), serializedStates };
   }
 }
 
@@ -68,7 +68,7 @@ function applyAggregateMovement(records: Map<string, InventoryCandidate>, moveme
 
 function baselineMovement(item: InventoryCandidate, index: number, date: string): InventoryMovement {
   return { movementId: `BASELINE-${index}`, identityAuthority: 'PERSISTED', origin: 'SYSTEM_NATIVE', replayEligibility: 'MIGRATION_BASELINE', sourceSequence: index,
-    sourceRecordRef: { sourceSystem: 'FEISHU_LEDGER', sourceType: 'OPERATIONAL_LEDGER', internalRecordKey: `baseline:${index}` }, businessDate: date,
+    sourceRecordRef: { sourceSystem: 'FEISHU_LEDGER', sourceType: 'OPERATIONAL_LEDGER', internalRecordKey: `baseline:${index}` }, businessDate: date.slice(0, 10), createdAt: date,
     ledgerAction: '期初库存', workflow: 'OPENING_BALANCE', sku: item.sku, ...(item.displayName ? { displayName: item.displayName } : {}), ...(item.sn ? { sn: item.sn } : {}),
     qty: 1, stockConditionAfter: item.condition, toLocation: item.location, ...(item.container ? { containerCode: item.container } : {}), inventoryEffect: 'INCREASE', verificationStatus: 'VERIFIED' };
 }
@@ -77,4 +77,10 @@ function key(item: Pick<InventoryCandidate, 'sku' | 'location' | 'condition' | '
 function add(records: Map<string, InventoryCandidate>, item: InventoryCandidate, qty: number): void { const id = key(item), existing = records.get(id); if (existing) existing.availableQty += qty; else records.set(id, { ...item, availableQty: qty }); }
 function subtract(records: Map<string, InventoryCandidate>, item: InventoryCandidate, qty: number): void { const id = key(item), existing = records.get(id); if (!existing) return; existing.availableQty = Math.max(0, existing.availableQty - qty); }
 function canonical(value: string): string { return value.trim().toUpperCase().replace(/\s+/g, '').replace(/^(.{7})[0R](.*)$/, '$1*$2'); }
+function isOffsetTimestamp(value: string): boolean { return /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?(?:Z|[+-]\d{2}:\d{2})$/.test(value) && Number.isFinite(Date.parse(value)); }
+function afterBaseline(movement: InventoryMovement, effectiveAt: string): boolean {
+  if (movement.replayEligibility !== 'CURRENT_STATE' || movement.origin !== 'SYSTEM_NATIVE') return false;
+  if (!movement.createdAt || !isOffsetTimestamp(movement.createdAt)) throw new Error('SYSTEM_NATIVE_MOVEMENT_TIMESTAMP_MISSING');
+  return Date.parse(movement.createdAt) > Date.parse(effectiveAt);
+}
 function compare(left: InventoryCandidate, right: InventoryCandidate): number { return left.location.localeCompare(right.location) || left.sku.localeCompare(right.sku) || (left.sn ?? '').localeCompare(right.sn ?? ''); }

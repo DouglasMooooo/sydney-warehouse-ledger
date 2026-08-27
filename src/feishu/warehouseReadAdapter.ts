@@ -25,6 +25,8 @@ import { DeterministicSnLifecycleReplayService } from '../domain/sn/snLifecycleR
 import type { CurrentSnState } from '../domain/sn/types.js';
 import { reversedOutboundLedgerRow } from '../application/outboundReversalMarker.js';
 import { CurrentInventoryProjectionService, assertAuthoritativeBaseline, type CurrentInventorySourceType } from '../application/currentInventoryProjection.js';
+import { parseSystemLedgerMarker } from './openApiLedgerWriter.js';
+import { verifyCurrentInventoryBaseline } from '../application/currentInventoryBaselineVerifier.js';
 
 const MAIN = {
   date: 0, outboundDate: 1, action: 2, sh: 3, pickup: 4, container: 5,
@@ -39,7 +41,7 @@ export interface FeishuWarehouseReadConfig {
   mainSheetId: string;
   currentInventorySheetId: string;
   currentInventoryAuthorityMode?: CurrentInventorySourceType;
-  currentInventoryBaselineEffectiveDate?: string;
+  currentInventoryBaselineEffectiveAt?: string;
 }
 
 export class FeishuWarehouseReadAdapter implements WarehouseReadPort, MovementReadPort {
@@ -344,10 +346,12 @@ export class FeishuWarehouseReadAdapter implements WarehouseReadPort, MovementRe
 
   private async currentInventorySnapshot() {
     const sourceType = this.config.currentInventoryAuthorityMode ?? 'UNKNOWN';
-    const effectiveDate = this.config.currentInventoryBaselineEffectiveDate ?? '';
-    assertAuthoritativeBaseline(sourceType, effectiveDate);
+    const effectiveAt = this.config.currentInventoryBaselineEffectiveAt ?? '';
+    assertAuthoritativeBaseline(sourceType, effectiveAt);
     const [inventory, records] = await Promise.all([this.readInventory(), this.readLedgerRecords()]);
-    return CURRENT_INVENTORY_PROJECTOR.project({ sourceType, effectiveDate, records: parseInventoryRecords(inventory).records }, MOVEMENT_PROJECTOR.projectLedgerRecords(records).movements);
+    const baselineVerification = verifyCurrentInventoryBaseline(inventory, sourceType);
+    if (!baselineVerification.valid) throw new Error(baselineVerification.code);
+    return CURRENT_INVENTORY_PROJECTOR.project({ sourceType, effectiveAt, records: parseInventoryRecords(inventory).records }, MOVEMENT_PROJECTOR.projectLedgerRecords(records).movements);
   }
 
   private async readValidLocations(): Promise<Set<string>> {
@@ -390,7 +394,7 @@ export function warehouseReadAdapterFromEnv(): FeishuWarehouseReadAdapter {
     mainSheetId: requiredEnv('FEISHU_MAIN_SHEET_ID'),
     currentInventorySheetId: requiredEnv('FEISHU_CURRENT_INVENTORY_SHEET_ID'),
     currentInventoryAuthorityMode: (process.env.CURRENT_INVENTORY_AUTHORITY_MODE?.trim() ?? 'UNKNOWN') as CurrentInventorySourceType,
-    currentInventoryBaselineEffectiveDate: process.env.CURRENT_INVENTORY_BASELINE_EFFECTIVE_DATE?.trim() ?? '',
+    currentInventoryBaselineEffectiveAt: process.env.CURRENT_INVENTORY_BASELINE_EFFECTIVE_AT?.trim() ?? '',
   };
   return new FeishuWarehouseReadAdapter(config, warehouseSheetReaderFromEnv());
 }
@@ -533,14 +537,14 @@ function locationRecordsFromCandidates(items: readonly InventoryCandidate[]): Lo
 
 function toMovementLedgerRecord(row:TypedSheetData['data'][number],sourceSequence:number):OperationalLedgerRecord{
   const qty=parseSourceNumber(row[MAIN.qty]),remark=text(row[MAIN.remark]);
-  const systemMarker=/\[SYSTEM_NATIVE\][\s\S]*?\bmovementId=(MOV-[^;\s]+)/.exec(remark);
-  const sourceRecordIdentifier=systemMarker?.[1];
+  const systemMarker=parseSystemLedgerMarker(remark);
+  const sourceRecordIdentifier=systemMarker.movementId;
   const transactionGroupId=/\bTXG-[^;\s]+\b/.exec(remark)?.[0];
   const origin=sourceRecordIdentifier?'SYSTEM_NATIVE':/\[(?:LEGACY_MIGRATION|历史追踪\|不计实时库存)\]/i.test(remark)?'LEGACY_MIGRATION':/Import reference:/i.test(remark)?'MANUAL_IMPORT':'LEGACY_MIGRATION';
   const condition=text(row[MAIN.stockCondition]);
   const record:OperationalLedgerRecord={sourceRecordRef:{sourceSystem:'FEISHU_LEDGER',sourceType:'OPERATIONAL_LEDGER',internalRecordKey:`ledger-row:${sourceSequence}`},sourceSequence,
     sourceBatch:origin==='SYSTEM_NATIVE'?'SYSTEM_NATIVE':origin,origin,
-    businessDate:businessDate(row[MAIN.date]),action:text(row[MAIN.action]),...(qty.kind==='valid'?{qty:qty.value}:{}),...(sourceRecordIdentifier?{sourceRecordIdentifier}:{}),...(transactionGroupId?{transactionGroupId}:{}),
+    businessDate:businessDate(row[MAIN.date]),action:text(row[MAIN.action]),...(qty.kind==='valid'?{qty:qty.value}:{}),...(sourceRecordIdentifier?{sourceRecordIdentifier}:{}),...(systemMarker.createdAt?{createdAt:systemMarker.createdAt}:{}),...(systemMarker.createdBy?{createdBy:systemMarker.createdBy}:{}),...(transactionGroupId?{transactionGroupId}:{}),
     ...(businessDate(row[MAIN.outboundDate])?{actualOutboundDate:businessDate(row[MAIN.outboundDate])}:{}),...(text(row[MAIN.sku])?{sku:text(row[MAIN.sku])}:{}),
     ...(text(row[MAIN.model])?{displayName:text(row[MAIN.model])}:{}),...(text(row[MAIN.sn])?{sn:text(row[MAIN.sn])}:{}),...(text(row[MAIN.fromLocation])?{fromLocation:text(row[MAIN.fromLocation])}:{}),
     ...(text(row[MAIN.toLocation])?{toLocation:text(row[MAIN.toLocation])}:{}),...(text(row[MAIN.container])?{containerCode:text(row[MAIN.container])}:{}),
