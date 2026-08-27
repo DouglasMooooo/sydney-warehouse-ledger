@@ -116,6 +116,13 @@ test('historical-only legacy evidence is visible but cannot alter current state'
   assert.equal(new DefaultMigrationPolicy('2026-01-01').classify(record(3,'入库',{origin:'LEGACY_MIGRATION',sourceRecordIdentifier:undefined,businessDate:'2025-12-31'})),'HISTORICAL_EVIDENCE_ONLY');
 });
 
+test('legacy provenance overrides a generic Feishu operational source batch, while system-native markers remain current',()=>{
+  const policy=new DefaultMigrationPolicy(undefined,['FEISHU_OPERATIONAL_LEDGER']);
+  assert.equal(policy.classify(record(1,'入库',{origin:'LEGACY_MIGRATION',sourceBatch:'FEISHU_OPERATIONAL_LEDGER',sourceRecordIdentifier:undefined})),'HISTORICAL_EVIDENCE_ONLY');
+  assert.equal(policy.classify(record(2,'入库',{origin:'MANUAL_IMPORT',sourceBatch:'FEISHU_OPERATIONAL_LEDGER',sourceRecordIdentifier:undefined})),'HISTORICAL_EVIDENCE_ONLY');
+  assert.equal(policy.classify(record(3,'入库',{origin:'SYSTEM_NATIVE',sourceBatch:'FEISHU_OPERATIONAL_LEDGER'})),'CURRENT_STATE');
+});
+
 test('migration baseline establishes state and is labelled separately from inbound',()=>{
   const baseline=record(1,'期初库存',{origin:'LEGACY_MIGRATION',sourceRecordIdentifier:undefined,sourceBatch:'CURRENT_STOCK_BASELINE'});
   const projected=project([baseline]);assert.equal(projected[0]?.replayEligibility,'MIGRATION_BASELINE');

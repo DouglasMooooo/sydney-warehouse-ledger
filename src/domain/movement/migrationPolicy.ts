@@ -9,13 +9,16 @@ export const FEISHU_OPERATIONAL_SOURCE_BATCHES=['FEISHU_OPERATIONAL_LEDGER'] as 
 export class DefaultMigrationPolicy implements MigrationPolicy {
   constructor(readonly operationalCutoff: string | undefined = undefined,private readonly operationalSourceBatches:readonly string[] = []) {}
   classify(record: OperationalLedgerRecord): ReplayEligibility {
-    if(/\[历史追踪\|不计实时库存\]/.test(record.remark??''))return 'HISTORICAL_EVIDENCE_ONLY';
+    if(/\[(?:历史追踪\|不计实时库存|LEGACY_MIGRATION)\]/i.test(record.remark??''))return 'HISTORICAL_EVIDENCE_ONLY';
+    if(/\[(?:OPENING_BALANCE|CURRENT_STOCK_BASELINE|MIGRATION_BASELINE)\]/i.test(record.remark??''))return 'MIGRATION_BASELINE';
     const batch=(record.sourceBatch??'').toUpperCase();
     if(batch.includes('HISTORICAL_ONLY'))return 'HISTORICAL_EVIDENCE_ONLY';
     if(['OPENING_BALANCE','CURRENT_STOCK_BASELINE','MIGRATION_BASELINE'].some(marker=>batch.includes(marker)))return 'MIGRATION_BASELINE';
-    if(this.operationalCutoff&&record.origin==='LEGACY_MIGRATION'&&record.businessDate&&record.businessDate<this.operationalCutoff)return 'HISTORICAL_EVIDENCE_ONLY';
+    // Provenance wins over a generic physical sheet/source label. A legacy or
+    // manual import may live in the same Feishu ledger as native operations.
+    if(record.origin==='LEGACY_MIGRATION'||record.origin==='MANUAL_IMPORT')return 'HISTORICAL_EVIDENCE_ONLY';
+    if(record.origin==='SYSTEM_NATIVE')return 'CURRENT_STATE';
     if(this.operationalSourceBatches.some(value=>batch===value.toUpperCase()))return 'CURRENT_STATE';
-    if(record.origin==='LEGACY_MIGRATION')return 'HISTORICAL_EVIDENCE_ONLY';
     return 'CURRENT_STATE';
   }
 }

@@ -46,6 +46,8 @@ test('controlled UAT registers only the reviewed preview, query, and write route
     'app/api/warehouse/exceptions/deep-scan/route.ts',
     'app/api/warehouse/operations/batch/execute/route.ts',
     'app/api/warehouse/operations/batch/preview/route.ts',
+    'app/api/warehouse/operations/inbound/execute/route.ts',
+    'app/api/warehouse/operations/inbound/preview/route.ts',
     'app/api/warehouse/operations/execute/route.ts',
     'app/api/warehouse/operations/preview/route.ts',
     'app/api/warehouse/outbound/batch/route.ts',
@@ -53,7 +55,7 @@ test('controlled UAT registers only the reviewed preview, query, and write route
     'app/api/warehouse/returns/preview/route.ts',
     'app/api/warehouse/work-orders/confirm/route.ts',
     'app/api/warehouse/work-orders/preview/route.ts',
-  ]);
+  ].sort());
   for (const forbidden of ['reservation', 'finalize']) assert(!routeFiles.some((path) => path.toLowerCase().includes(forbidden)));
   assert.equal(existsSync('app/api/warehouse/work-orders/prepare/route.ts'), false);
 });

@@ -7,13 +7,17 @@ import { ACTION_RULES, ADJUSTMENT_REASONS, type InventoryWorkflow, type Inventor
 import { STOCK_CONDITIONS } from '../../../src/config/controlledValues';
 import type { ApiResponse } from '../../../src/application/apiResponse';
 import { BatchTransferWorkspace } from './batch-transfer-workspace';
+import { BatchInboundWorkspace } from './batch-inbound-workspace';
+import { BatchOutboundClient } from '../tasks/batch-outbound-client';
 import type { MatrixLocation } from '../warehouse-layout/warehouse-matrix';
+import type { OperationalTask } from '../../../src/application/todayTasks';
 
 const DAILY: InventoryWorkflow[] = ['OUTBOUND', 'INBOUND', 'MOVE', 'REPAIR_COMPLETE'];
 const ADJUSTMENTS: InventoryWorkflow[] = ['ADJUST_INCREASE', 'ADJUST_DECREASE'];
 
-export function OperationsClient({ businessDate, canAdjust, locations }: { businessDate: string; canAdjust: boolean; locations: MatrixLocation[] }) {
+export function OperationsClient({ businessDate, canAdjust, locations, awaitingPickup }: { businessDate: string; canAdjust: boolean; locations: MatrixLocation[]; awaitingPickup: OperationalTask[] }) {
   const [workflow, setWorkflow] = useState<InventoryWorkflow>('MOVE');
+  const [batchMode,setBatchMode]=useState<'INBOUND'|'OUTBOUND'|undefined>();
   const [preview, setPreview] = useState<InventoryWorkflowPreview>();
   const [pending, setPending] = useState<InventoryWorkflowInput>();
   const [state, setState] = useState<'idle'|'previewing'|'ready'|'writing'|'done'|'error'>('idle');
@@ -22,7 +26,7 @@ export function OperationsClient({ businessDate, canAdjust, locations }: { busin
   const rule = ACTION_RULES[workflow];
 
   function choose(next: InventoryWorkflow) {
-    setWorkflow(next); setPreview(undefined); setPending(undefined); setState('idle'); setMessage(''); setOtherReason(false);
+    setWorkflow(next); setBatchMode(undefined); setPreview(undefined); setPending(undefined); setState('idle'); setMessage(''); setOtherReason(false);
   }
 
   async function requestPreview(event: FormEvent<HTMLFormElement>) {
@@ -48,7 +52,9 @@ export function OperationsClient({ businessDate, canAdjust, locations }: { busin
     } catch (reason) { setState('error'); setMessage(reason instanceof Error ? reason.message : '写入失败'); }
   }
 
-  const sidebar = <OperationsSidebar workflow={workflow} canAdjust={canAdjust} choose={choose}/>;
+  const sidebar = <OperationsSidebar workflow={workflow} batchMode={batchMode} canAdjust={canAdjust} choose={choose} chooseBatch={setBatchMode}/>;
+  if(batchMode==='INBOUND')return <div className="workflow-workbench batch-mode">{sidebar}<BatchInboundWorkspace businessDate={businessDate} locations={locations}/></div>;
+  if(batchMode==='OUTBOUND')return <div className="workflow-workbench batch-mode">{sidebar}<BatchOutboundClient tasks={awaitingPickup} businessDate={businessDate}/></div>;
   if (workflow === 'MOVE' || workflow === 'REPAIR_COMPLETE') {
     return <div className="workflow-workbench batch-mode">{sidebar}<BatchTransferWorkspace key={workflow} workflow={workflow} businessDate={businessDate} locations={locations}/></div>;
   }
@@ -83,10 +89,11 @@ export function OperationsClient({ businessDate, canAdjust, locations }: { busin
   </div>;
 }
 
-function OperationsSidebar({workflow,canAdjust,choose}:{workflow:InventoryWorkflow;canAdjust:boolean;choose:(value:InventoryWorkflow)=>void}) {
+function OperationsSidebar({workflow,batchMode,canAdjust,choose,chooseBatch}:{workflow:InventoryWorkflow;batchMode:'INBOUND'|'OUTBOUND'|undefined;canAdjust:boolean;choose:(value:InventoryWorkflow)=>void;chooseBatch:(value:'INBOUND'|'OUTBOUND')=>void}) {
   return <aside className="workflow-sidebar">
     <WorkflowLink href="/work-orders" label="工单备货" detail="导入工单，系统生成备货动作" />
     <WorkflowLink href="/returns" label="坏机接收" detail="批量 SN，默认进入 REPAIR-01" />
+    <div className="workflow-group"><h3>批量操作</h3><button type="button" className={batchMode==='INBOUND'?'active':''} onClick={()=>chooseBatch('INBOUND')}><Package size={17}/><span>批量入库<small>粘贴 SN / 表格，逐台校验</small></span></button><button type="button" className={batchMode==='OUTBOUND'?'active':''} onClick={()=>chooseBatch('OUTBOUND')}><Package size={17}/><span>批量确认出库<small>待取货 Pickup / SH</small></span></button></div>
     <WorkflowGroup title="日常作业" workflows={DAILY} selected={workflow} onSelect={choose} />
     <WorkflowGroup title="库存修正" workflows={ADJUSTMENTS} selected={workflow} onSelect={choose} locked={!canAdjust} />
     <div className="workflow-group"><h3>管理员</h3><button type="button" className={workflow === 'OPENING_BALANCE' ? 'active admin' : 'admin'} disabled={!canAdjust} onClick={() => choose('OPENING_BALANCE')}><ShieldWarning size={17}/><span>期初库存<small>{canAdjust ? '初始化专用' : '需要管理员权限'}</small></span></button></div>

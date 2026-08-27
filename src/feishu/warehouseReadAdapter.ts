@@ -20,7 +20,7 @@ import { deriveWeeklyWarehouseReport, type WeeklyManualMetrics, type WeeklyWareh
 import type { MovementQuery, MovementReadPort } from '../application/queries/movementQueryService.js';
 import type { InventoryMovement, OperationalLedgerRecord } from '../domain/movement/types.js';
 import { DeterministicMovementProjectionService } from '../domain/movement/movementProjection.js';
-import { DefaultMigrationPolicy, FEISHU_OPERATIONAL_SOURCE_BATCHES } from '../domain/movement/migrationPolicy.js';
+import { DefaultMigrationPolicy } from '../domain/movement/migrationPolicy.js';
 import { DeterministicSnLifecycleReplayService } from '../domain/sn/snLifecycleReplay.js';
 import type { CurrentSnState } from '../domain/sn/types.js';
 import { reversedOutboundLedgerRow } from '../application/outboundReversalMarker.js';
@@ -30,7 +30,7 @@ const MAIN = {
   sku: 6, model: 7, sn: 9, qty: 10, fromLocation: 11, toLocation: 12,
   erpWarehouse: 13, stockCondition: 15, remark: 21,
 } as const;
-const MOVEMENT_PROJECTOR=new DeterministicMovementProjectionService(new DefaultMigrationPolicy(undefined,FEISHU_OPERATIONAL_SOURCE_BATCHES));
+const MOVEMENT_PROJECTOR=new DeterministicMovementProjectionService(new DefaultMigrationPolicy());
 
 export interface FeishuWarehouseReadConfig {
   spreadsheetUrl: string;
@@ -55,13 +55,13 @@ export class FeishuWarehouseReadAdapter implements WarehouseReadPort, MovementRe
 
   async readDashboardSource(asOf: BusinessDate): Promise<DashboardSnapshot> {
     const [main, inventory, validLocations] = await Promise.all([this.readMain(), this.readInventory(), this.readValidLocations()]);
-    const mainRows = main.data.slice(1).filter((row) => text(row[MAIN.action]));
+    const mainRows = currentOperationalEntries(main).map((item) => item.row);
     const inventoryModel = parseInventoryRecords(inventory);
     const inventoryRows = inventoryModel.records;
     const prepared = mainRows.filter((row) => text(row[MAIN.action]) === '备货');
     const returns = mainRows.filter((row) => text(row[MAIN.action]) === '退回维修');
     const shipped = mainRows.filter((row) => text(row[MAIN.action]) === '出库');
-    const operationalRows = mainRows.map((row, index) => toOperationalLedgerRow(row, index + 2));
+    const operationalRows = currentOperationalEntries(main).map(({ row, ledgerRow }) => toOperationalLedgerRow(row, ledgerRow));
     const tasks = deriveTodayTasks(operationalRows, asOf);
     const rawInventory = rawInventoryRecords(inventory);
     const inventorySummary = summarizeLocations(rawInventory);
@@ -192,7 +192,7 @@ export class FeishuWarehouseReadAdapter implements WarehouseReadPort, MovementRe
   async findPreparedByReference(reference: string, rawSn: string): Promise<PreparedTransaction | undefined> {
     const normalizedReference = reference.trim().toUpperCase();
     const sn = normalizeSn(rawSn);
-    const rows = (await this.readMain()).data.slice(1).filter((row) => text(row[MAIN.action]) === '备货'
+    const rows = currentOperationalEntries(await this.readMain()).map((item) => item.row).filter((row) => text(row[MAIN.action]) === '备货'
       && [text(row[MAIN.pickup]), text(row[MAIN.sh])].some((value) => value.toUpperCase() === normalizedReference));
     const exact = rows.find((row) => normalizeSn(text(row[MAIN.sn])) === sn) ?? (rows.length === 1 ? rows[0] : undefined);
     if (!exact) return undefined;
@@ -205,13 +205,12 @@ export class FeishuWarehouseReadAdapter implements WarehouseReadPort, MovementRe
 
   async findReversibleOutboundBySh(rawShNo: string): Promise<OutboundTransaction[]> {
     const shNo = rawShNo.trim().toUpperCase();
-    const rows = (await this.readMain()).data.slice(1);
+    const rows = currentOperationalEntries(await this.readMain());
     const reversedRows = new Set(rows
-      .filter((row) => text(row[MAIN.action]) === '库存调增')
-      .map((row) => reversedOutboundLedgerRow(text(row[MAIN.remark])))
+      .filter(({ row }) => text(row[MAIN.action]) === '库存调增')
+      .map(({ row }) => reversedOutboundLedgerRow(text(row[MAIN.remark])))
       .filter((row): row is number => row !== undefined));
-    return rows.flatMap((row, index): OutboundTransaction[] => {
-      const ledgerRow = index + 2;
+    return rows.flatMap(({ row, ledgerRow }): OutboundTransaction[] => {
       if (reversedRows.has(ledgerRow) || text(row[MAIN.action]) !== '出库' || text(row[MAIN.sh]).toUpperCase() !== shNo) return [];
       const condition = text(row[MAIN.stockCondition]) as StockCondition;
       const qty = parseSourceNumber(row[MAIN.qty]);
@@ -231,9 +230,8 @@ export class FeishuWarehouseReadAdapter implements WarehouseReadPort, MovementRe
   }
 
   async readTodayTasks(asOf: BusinessDate): Promise<TodayTaskSnapshot> {
-    const rows = (await this.readMain()).data.slice(1)
-      .filter((row) => text(row[MAIN.action]))
-      .map((row, index) => toOperationalLedgerRow(row, index + 2));
+    const rows = currentOperationalEntries(await this.readMain())
+      .map(({ row, ledgerRow }) => toOperationalLedgerRow(row, ledgerRow));
     return deriveTodayTasks(rows, asOf);
   }
 
@@ -254,8 +252,7 @@ export class FeishuWarehouseReadAdapter implements WarehouseReadPort, MovementRe
   async readOperationalExceptions(): Promise<{ exceptions: OperationalException[]; supportedCodes: readonly string[] }> {
     const [main, inventoryTable, validLocations] = await Promise.all([this.readMain(), this.readInventory(), this.readValidLocations()]);
     const inventory = rawInventoryRecords(inventoryTable);
-    const rows = main.data.slice(1).filter((row) => text(row[MAIN.action]))
-      .map((row, index) => toOperationalLedgerRow(row, index + 2));
+    const rows = currentOperationalEntries(main).map(({ row, ledgerRow }) => toOperationalLedgerRow(row, ledgerRow));
     const summary = summarizeLocations(inventory);
     const exceptions = [
       ...deriveLedgerExceptions(rows, validLocations),
@@ -516,10 +513,14 @@ function mondayOf(date: BusinessDate): string {
 }
 
 function toMovementLedgerRecord(row:TypedSheetData['data'][number],sourceSequence:number):OperationalLedgerRecord{
-  const qty=parseSourceNumber(row[MAIN.qty]),remark=text(row[MAIN.remark]),sourceRecordIdentifier=/\bMOV-\d{8}-\d{6}\b/.exec(remark)?.[0],transactionGroupId=/\bTXG-\d{8}-\d{6}\b/.exec(remark)?.[0];
+  const qty=parseSourceNumber(row[MAIN.qty]),remark=text(row[MAIN.remark]);
+  const systemMarker=/\[SYSTEM_NATIVE\][\s\S]*?\bmovementId=(MOV-[^;\s]+)/.exec(remark);
+  const sourceRecordIdentifier=systemMarker?.[1];
+  const transactionGroupId=/\bTXG-[^;\s]+\b/.exec(remark)?.[0];
+  const origin=sourceRecordIdentifier?'SYSTEM_NATIVE':/\[(?:LEGACY_MIGRATION|历史追踪\|不计实时库存)\]/i.test(remark)?'LEGACY_MIGRATION':/Import reference:/i.test(remark)?'MANUAL_IMPORT':'LEGACY_MIGRATION';
   const condition=text(row[MAIN.stockCondition]);
   const record:OperationalLedgerRecord={sourceRecordRef:{sourceSystem:'FEISHU_LEDGER',sourceType:'OPERATIONAL_LEDGER',internalRecordKey:`ledger-row:${sourceSequence}`},sourceSequence,
-    sourceBatch:'FEISHU_OPERATIONAL_LEDGER',origin:sourceRecordIdentifier?'SYSTEM_NATIVE':/Import reference:/i.test(remark)?'MANUAL_IMPORT':'LEGACY_MIGRATION',
+    sourceBatch:origin==='SYSTEM_NATIVE'?'SYSTEM_NATIVE':origin,origin,
     businessDate:businessDate(row[MAIN.date]),action:text(row[MAIN.action]),...(qty.kind==='valid'?{qty:qty.value}:{}),...(sourceRecordIdentifier?{sourceRecordIdentifier}:{}),...(transactionGroupId?{transactionGroupId}:{}),
     ...(businessDate(row[MAIN.outboundDate])?{actualOutboundDate:businessDate(row[MAIN.outboundDate])}:{}),...(text(row[MAIN.sku])?{sku:text(row[MAIN.sku])}:{}),
     ...(text(row[MAIN.model])?{displayName:text(row[MAIN.model])}:{}),...(text(row[MAIN.sn])?{sn:text(row[MAIN.sn])}:{}),...(text(row[MAIN.fromLocation])?{fromLocation:text(row[MAIN.fromLocation])}:{}),
@@ -528,6 +529,17 @@ function toMovementLedgerRecord(row:TypedSheetData['data'][number],sourceSequenc
   };
   if(STOCK_CONDITIONS.includes(condition as StockCondition))record.stockCondition=condition as StockCondition;
   return record;
+}
+
+/** A legacy row remains available through audit/history reads but is excluded
+ * from every live operational projection (tasks, dashboard and exceptions). */
+function currentOperationalEntries(table: TypedSheetData): Array<{ row: TypedSheetData['data'][number]; ledgerRow: number }> {
+  return table.data.slice(1).flatMap((row, index) => {
+    if (!text(row[MAIN.action])) return [];
+    const ledgerRow = index + 2;
+    const eligibility = MOVEMENT_PROJECTOR.projectLedgerRecord(toMovementLedgerRecord(row, ledgerRow)).replayEligibility;
+    return eligibility === 'CURRENT_STATE' || eligibility === 'MIGRATION_BASELINE' ? [{ row, ledgerRow }] : [];
+  });
 }
 
 function movementRecordMatches(record:OperationalLedgerRecord,query:MovementQuery):boolean{

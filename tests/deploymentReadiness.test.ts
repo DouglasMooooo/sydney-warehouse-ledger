@@ -6,6 +6,7 @@ test('every operational confirmation requires a preview command ID and preserves
   for (const route of [
     'app/api/warehouse/operations/execute/route.ts',
     'app/api/warehouse/operations/batch/execute/route.ts',
+    'app/api/warehouse/operations/inbound/execute/route.ts',
     'app/api/warehouse/work-orders/confirm/route.ts',
     'app/api/warehouse/outbound/batch/route.ts',
     'app/api/warehouse/outbound/reversal/route.ts',
@@ -23,6 +24,7 @@ test('Feishu operational writes have one writer gateway and use the process-loca
   for (const route of [
     'app/api/warehouse/operations/execute/route.ts',
     'app/api/warehouse/operations/batch/execute/route.ts',
+    'app/api/warehouse/operations/inbound/execute/route.ts',
     'app/api/warehouse/work-orders/confirm/route.ts',
     'app/api/warehouse/outbound/batch/route.ts',
     'app/api/warehouse/outbound/reversal/route.ts',

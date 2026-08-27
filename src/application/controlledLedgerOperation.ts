@@ -15,6 +15,31 @@ export interface ControlledBatchTransferInput {
   sns: string[];
 }
 
+export interface ControlledBatchInboundLine {
+  sn: string;
+  sku: string;
+  toLocation: string;
+  stockCondition: '新机' | '维修良品' | '待修' | '报废' | '物料';
+  containerCode?: string;
+  remark?: string;
+}
+
+export interface ControlledBatchInboundInput {
+  commandId?: string;
+  date: string;
+  lines: ControlledBatchInboundLine[];
+}
+
+export interface ControlledBatchInboundPreview {
+  commandId: string;
+  operation: 'BATCH_INBOUND';
+  lines: Array<{ line: ControlledBatchInboundLine; status: 'READY' | 'BLOCKED'; preview?: InventoryWorkflowPreview; reason?: string }>;
+  totalRows: number;
+  readyCount: number;
+  blockedCount: number;
+  warnings: string[];
+}
+
 export interface ControlledBatchTransferPreview {
   commandId: string;
   workflow: ControlledBatchTransferInput['workflow'];
@@ -80,6 +105,42 @@ export async function executeControlledBatchTransfer(
   const preview = await previewControlledBatchTransfer(input, port);
   const writeContext: WarehouseLedgerWriteContext = { ...(context ?? { createdBy: 'UNKNOWN_OPERATOR' }), ...(input.commandId ? { commandId: input.commandId } : {}) };
   return writer.append(preview.items.flatMap((item) => item.preview.rows), writeContext);
+}
+
+export async function previewControlledBatchInbound(input: ControlledBatchInboundInput, port: WarehouseReadPort): Promise<ControlledBatchInboundPreview> {
+  if (!Array.isArray(input.lines) || !input.lines.length || input.lines.length > 100) throw new TypeError('BATCH_INBOUND_SIZE_REQUIRED');
+  const seen = new Set<string>();
+  const lines: ControlledBatchInboundPreview['lines'] = [];
+  for (const line of input.lines) {
+    const sn = String(line.sn ?? '').trim().toUpperCase().replace(/\s+/g, '');
+    if (!sn || seen.has(sn)) { lines.push({ line, status: 'BLOCKED', reason: !sn ? 'MISSING_SN' : 'DUPLICATE_IN_BATCH' }); continue; }
+    seen.add(sn);
+    try {
+      if (port.findCurrentSerializedInventory) {
+        const current = await port.findCurrentSerializedInventory(sn);
+        if (current && current.currentState !== 'OUTBOUND') throw new TypeError('SN_ALREADY_IN_CURRENT_INVENTORY');
+      }
+      const preview = await prepareInventoryWorkflow({ workflow: 'INBOUND', date: input.date, ...line, sn }, port);
+      lines.push({ line: { ...line, sn }, status: 'READY', preview });
+    } catch (error) { lines.push({ line: { ...line, sn }, status: 'BLOCKED', reason: error instanceof Error ? error.message : 'INBOUND_VALIDATION_FAILED' }); }
+  }
+  const ready = lines.filter((item) => item.status === 'READY');
+  return { commandId: input.commandId?.trim() || newCommandId(), operation: 'BATCH_INBOUND', lines,
+    totalRows: ready.reduce((sum, item) => sum + (item.preview?.rows.length ?? 0), 0), readyCount: ready.length,
+    blockedCount: lines.length - ready.length, warnings: lines.some((item) => item.status === 'BLOCKED') ? ['存在 BLOCKED 行：本批次默认全有或全无，删除或修正后重新生成预览。'] : [] };
+}
+
+export async function executeControlledBatchInbound(
+  input: ControlledBatchInboundInput,
+  port: WarehouseReadPort,
+  writer: Pick<OpenApiLedgerWriter, 'append'>,
+  env: Readonly<Record<string, string | undefined>> = process.env,
+  context?: WarehouseLedgerWriteContext,
+): Promise<ConfirmedOpenApiWrite> {
+  assertBusinessMutationAllowed(env);
+  const preview = await previewControlledBatchInbound(input, port);
+  if (preview.blockedCount) throw new TypeError('BATCH_INBOUND_BLOCKED_LINES');
+  return writer.append(preview.lines.flatMap((item) => item.preview?.rows ?? []), { ...(context ?? { createdBy: 'UNKNOWN_OPERATOR' }), ...(input.commandId ? { commandId: input.commandId } : {}) });
 }
 
 function normalizeBatchSns(values: string[], workflow: ControlledBatchTransferInput['workflow']): string[] {

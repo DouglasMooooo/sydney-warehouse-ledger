@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { executeControlledBatchTransfer, executeControlledLedgerOperation, previewControlledBatchTransfer } from '../src/application/controlledLedgerOperation.js';
+import { executeControlledBatchInbound, executeControlledBatchTransfer, executeControlledLedgerOperation, previewControlledBatchInbound, previewControlledBatchTransfer } from '../src/application/controlledLedgerOperation.js';
 import type { WarehouseReadPort } from '../src/application/contracts.js';
 
 const port={findAvailableInventory:async()=>[{sku:'SKU1',model:'M',location:'R1-1-1-L',availableQty:5,condition:'维修良品' as const}],findProduct:async()=>({sku:'SKU1',model:'M'}),readPickupCodes:async()=>[],readDashboardSource:async()=>{throw new Error('unused');},findCurrentSerializedInventory:async()=>({sn:'SN1',sku:'SKU1',location:'R1-1-1-L',availableQty:1,stockCondition:'维修良品' as const,currentState:'GOOD' as const})} satisfies WarehouseReadPort;
@@ -40,4 +40,24 @@ test('repair complete batch converts each repaired SN and rejects the repair sou
   assert.equal(preview.totalRows,4);
   assert.deepEqual(preview.items.map(item=>item.preview.rows[1]?.sn),['60HD103R64PM133','60HD153R64PM134']);
   await assert.rejects(()=>previewControlledBatchTransfer({workflow:'REPAIR_COMPLETE',date:'2026-08-26',toLocation:'REPAIR-01',sns:['60HD103064PM133']},repairPort),/MOVE_SOURCE_EQUALS_TARGET/);
+});
+
+test('batch inbound normalizes SNs, blocks duplicates/current stock, and commits one verified batch only when every row is ready',async()=>{
+  const inboundPort={...port,findCurrentSerializedInventory:async(sn:string)=>sn==='EXISTING'?{sn,sku:'SKU1',location:'R1-1-1-L',stockCondition:'新机' as const,currentState:'GOOD' as const}:undefined};
+  const ready=await previewControlledBatchInbound({date:'2026-08-26',lines:[
+    {sn:' sn-new-1 ',sku:'SKU1',toLocation:'R1-1-1-L',stockCondition:'新机'},
+    {sn:'SN-NEW-2',sku:'SKU1',toLocation:'R1-1-1-R',stockCondition:'维修良品'},
+  ]},inboundPort);
+  assert.equal(ready.readyCount,2); assert.equal(ready.blockedCount,0);
+  assert.deepEqual(ready.lines.map(item=>item.line.sn),['SN-NEW-1','SN-NEW-2']);
+  let rows:readonly unknown[]=[]; let context:unknown;
+  const result=await executeControlledBatchInbound({date:'2026-08-26',commandId:ready.commandId,lines:ready.lines.map(item=>item.line)},inboundPort,{append:async(input,writeContext)=>{rows=input;context=writeContext;return{rows:[20,21],verified:true as const,reconciliation:'PASS' as const};}},{READ_ONLY_RELEASE:'false',CONTROLLED_WRITE_UAT:'true'},{createdBy:'UAT_OPERATOR'});
+  assert.equal(result.verified,true); assert.equal(rows.length,2); assert.deepEqual(context,{createdBy:'UAT_OPERATOR',commandId:ready.commandId});
+  const blocked=await previewControlledBatchInbound({date:'2026-08-26',lines:[
+    {sn:'EXISTING',sku:'SKU1',toLocation:'R1-1-1-L',stockCondition:'新机'},
+    {sn:'duplicate',sku:'SKU1',toLocation:'R1-1-1-L',stockCondition:'新机'},
+    {sn:' DUPLICATE ',sku:'SKU1',toLocation:'R1-1-1-L',stockCondition:'新机'},
+  ]},inboundPort);
+  assert.equal(blocked.blockedCount,2); assert.match(blocked.warnings[0]??'',/全有或全无/);
+  await assert.rejects(()=>executeControlledBatchInbound({date:'2026-08-26',commandId:blocked.commandId,lines:blocked.lines.map(item=>item.line)},inboundPort,{append:async()=>{throw new Error('must not write');}},{READ_ONLY_RELEASE:'false',CONTROLLED_WRITE_UAT:'true'}),/BATCH_INBOUND_BLOCKED_LINES/);
 });
