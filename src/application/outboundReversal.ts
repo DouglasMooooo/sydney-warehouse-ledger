@@ -1,6 +1,6 @@
 import type { LedgerWriteInput } from '../ledger/typedWrite.js';
 import { prepareLedgerWrite } from '../ledger/typedWrite.js';
-import type { ConfirmedOpenApiWrite, OpenApiLedgerWriter } from '../feishu/openApiLedgerWriter.js';
+import type { ConfirmedOpenApiWrite, OpenApiLedgerWriter, WarehouseLedgerWriteContext } from '../feishu/openApiLedgerWriter.js';
 import { assertBusinessMutationAllowed } from '../safety/readOnlyRelease.js';
 import type { OutboundTransaction, WarehouseReadPort } from './contracts.js';
 import { isOperationalShNumber } from './shNumber.js';
@@ -74,11 +74,11 @@ export async function confirmOutboundReversal(
   input: OutboundReversalInput,
   port: WarehouseReadPort,
   writer: Pick<OpenApiLedgerWriter, 'append'>,
-  env: Readonly<Record<string, string | undefined>> = process.env,
+  env: Readonly<Record<string, string | undefined>> = process.env, context?: WarehouseLedgerWriteContext,
 ): Promise<ConfirmedOpenApiWrite> {
   assertBusinessMutationAllowed(env);
   const preview = await previewOutboundReversal(input, port);
-  return writer.append(preview.rows);
+  return writer.append(preview.rows, context);
 }
 
 function normalizeSh(value: string): string {

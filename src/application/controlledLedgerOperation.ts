@@ -1,6 +1,6 @@
 import type { WarehouseReadPort } from './contracts.js';
 import { assertBusinessMutationAllowed } from '../safety/readOnlyRelease.js';
-import type { ConfirmedOpenApiWrite, OpenApiLedgerWriter } from '../feishu/openApiLedgerWriter.js';
+import type { ConfirmedOpenApiWrite, OpenApiLedgerWriter, WarehouseLedgerWriteContext } from '../feishu/openApiLedgerWriter.js';
 import { prepareInventoryWorkflow, type InventoryWorkflowInput, type InventoryWorkflowPreview } from './inventoryActionEngine.js';
 
 export const CONTROLLED_UAT_ACTIONS = ['入库', '出库', '移库', '库存调增', '库存调减'] as const;
@@ -27,10 +27,11 @@ export async function executeControlledLedgerOperation(
   port: WarehouseReadPort,
   writer: Pick<OpenApiLedgerWriter, 'append'>,
   env: Readonly<Record<string, string | undefined>> = process.env,
+  context?: WarehouseLedgerWriteContext,
 ): Promise<ConfirmedOpenApiWrite> {
   assertBusinessMutationAllowed(env);
   const preview = await prepareInventoryWorkflow(input, port);
-  return writer.append(preview.rows);
+  return writer.append(preview.rows, context);
 }
 
 export function previewControlledLedgerOperation(input: ControlledOperationInput, port: WarehouseReadPort): Promise<InventoryWorkflowPreview> {
@@ -69,10 +70,11 @@ export async function executeControlledBatchTransfer(
   port: WarehouseReadPort,
   writer: Pick<OpenApiLedgerWriter, 'append'>,
   env: Readonly<Record<string, string | undefined>> = process.env,
+  context?: WarehouseLedgerWriteContext,
 ): Promise<ConfirmedOpenApiWrite> {
   assertBusinessMutationAllowed(env);
   const preview = await previewControlledBatchTransfer(input, port);
-  return writer.append(preview.items.flatMap((item) => item.preview.rows));
+  return writer.append(preview.items.flatMap((item) => item.preview.rows), context);
 }
 
 function normalizeBatchSns(values: string[], workflow: ControlledBatchTransferInput['workflow']): string[] {

@@ -1,7 +1,7 @@
 import type { WarehouseReadPort } from './contracts.js';
 import { preparedConditionForWarehouse } from './erpWarehouseRules.js';
 import { nextPickupCode } from './workOrderPreview.js';
-import type { OpenApiLedgerWriter, ConfirmedOpenApiWrite } from '../feishu/openApiLedgerWriter.js';
+import type { OpenApiLedgerWriter, ConfirmedOpenApiWrite, WarehouseLedgerWriteContext } from '../feishu/openApiLedgerWriter.js';
 import { parseBusinessDateString } from '../ledger/businessDate.js';
 import type { LedgerWriteInput } from '../ledger/typedWrite.js';
 import { assertBusinessMutationAllowed } from '../safety/readOnlyRelease.js';
@@ -49,15 +49,15 @@ export interface PreparedBatchConfirmResult extends ConfirmedOpenApiWrite {
 
 export async function confirmPreparedWorkOrder(
   input:PreparedConfirmInput, port:WarehouseReadPort, writer:Pick<OpenApiLedgerWriter,'append'>,
-  env:Readonly<Record<string,string|undefined>>=process.env,
+  env:Readonly<Record<string,string|undefined>>=process.env, context?:WarehouseLedgerWriteContext,
 ):Promise<ConfirmedOpenApiWrite & {pickupCode:string}> {
-  const batch = await confirmPreparedWorkOrderBatch({ businessDate: input.businessDate, workOrders: [{ sh: input.sh, lines: input.lines }] }, port, writer, env);
+  const batch = await confirmPreparedWorkOrderBatch({ businessDate: input.businessDate, workOrders: [{ sh: input.sh, lines: input.lines }] }, port, writer, env, context);
   return { rows: batch.rows, verified: true, reconciliation: 'PASS', pickupCode: batch.workOrders[0]!.pickupCode };
 }
 
 export async function confirmPreparedWorkOrderBatch(
   input: PreparedBatchConfirmInput, port: WarehouseReadPort, writer: Pick<OpenApiLedgerWriter,'append'>,
-  env: Readonly<Record<string,string|undefined>> = process.env,
+  env: Readonly<Record<string,string|undefined>> = process.env, context?: WarehouseLedgerWriteContext,
 ): Promise<PreparedBatchConfirmResult> {
   assertBusinessMutationAllowed(env);
   const date = parseBusinessDateString(input.businessDate);
@@ -111,5 +111,5 @@ export async function confirmPreparedWorkOrderBatch(
     labels.push({ sh, pickupCode, lines: [...labelGroups.values()] });
   }
   if (rows.length > 100) throw new TypeError('PREPARED_BATCH_TOO_LARGE');
-  return { ...await writer.append(rows), workOrders, labels };
+  return { ...await writer.append(rows, context), workOrders, labels };
 }

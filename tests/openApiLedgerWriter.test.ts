@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { OpenApiLedgerWriter } from '../src/feishu/openApiLedgerWriter.js';
+import { createMovementIdentity, OpenApiLedgerWriter } from '../src/feishu/openApiLedgerWriter.js';
+import { prepareLedgerWrite } from '../src/ledger/typedWrite.js';
 import type { WarehouseSheetReader } from '../src/feishu/sheetReader.js';
 import type { FeishuOpenApiClient } from '../src/feishu/openApiClient.js';
 
@@ -18,7 +19,7 @@ test('OpenAPI writer preserves numeric date formatting and protected formulas en
     async post(_path:string,body:unknown){posts.push(body);return{};},
     async put(_path:string,body:unknown){puts.push(body);return{};},
   } as unknown as FeishuOpenApiClient;
-  const reader:WarehouseSheetReader={async readTable(){return{name:'main',range:'A1:AC2',columns:[],data:[Array(29).fill(''),['2026-08-24']],dtypes:{}};},async healthCheck(){return true;}};
+  const reader:WarehouseSheetReader={async readTable(input){return{name:'main',range:'A1:AC2',columns:headers(),data:input.noHeader?[headers(),['2026-08-24']]:[['2026-08-24']],dtypes:{}};},async healthCheck(){return true;}};
   const result=await new OpenApiLedgerWriter('token','main',client,reader).append([{date:'2026-08-25',action:'入库',sku:'00123',qty:2,toLocation:'R1-1-1-L',stockCondition:'新机',remark:'UAT'}]);
   assert.deepEqual(result,{rows:[3],verified:true,reconciliation:'PASS'});
   assert.equal(puts.length,1);
@@ -28,3 +29,19 @@ test('OpenAPI writer preserves numeric date formatting and protected formulas en
   assert(ranges.some(item=>item.range==='main!A3:A3'&&typeof item.values[0]?.[0]==='number'));
   assert(!ranges.some(item=>/!H3:H3|!I3:I3|!O3:O3/.test(item.range)));
 });
+
+test('writer fails closed on header mismatch and treats an existing idempotency marker as already committed', async () => {
+  const input={date:'2026-08-25',action:'入库' as const,sku:'00123',qty:1,toLocation:'R1-1-1-L',stockCondition:'新机' as const};
+  const prepared=prepareLedgerWrite(input,false); assert(prepared.ok);
+  const identity=createMovementIdentity(prepared.normalized!);
+  const existing=Array(29).fill(''); existing[21]=`[SYSTEM_NATIVE] movementId=${identity.movementId}; idempotencyKey=${identity.idempotencyKey}; createdBy=u1; source=WAREHOUSE_APP`;
+  let posts=0;
+  const client={async get(){return{valueRange:{values:[Array(29).fill('')]}};},async post(){posts+=1;return{};},async put(){return{};}} as unknown as FeishuOpenApiClient;
+  const reader:WarehouseSheetReader={async readTable(input){return{name:'main',range:'A1:AC2',columns:headers(),data:input.noHeader?[headers(),existing]:[existing],dtypes:{}};},async healthCheck(){return true;}};
+  const result=await new OpenApiLedgerWriter('token','main',client,reader).append([input],{createdBy:'u1'});
+  assert.equal(result.status,'ALREADY_COMMITTED'); assert.equal(posts,0); assert.deepEqual(result.rows,[2]);
+  const invalidReader:WarehouseSheetReader={async readTable(){return{name:'main',range:'A1',columns:[],data:[],dtypes:{}};},async healthCheck(){return true;}};
+  await assert.rejects(()=>new OpenApiLedgerWriter('token','main',client,invalidReader).append([input],{createdBy:'u1'}),/OPERATIONAL_LEDGER_SCHEMA_MISMATCH/);
+});
+
+function headers(): string[] { const row=Array(29).fill(''); Object.assign(row,{0:'日期',1:'实际出库日',2:'动作',3:'ERP SH单号',4:'取货码',5:'容器码',6:'料号',9:'机器唯一码（SN）',10:'数量',11:'来源库位',12:'目标库位',13:'ERP仓库选择',15:'库存属性',21:'备注'}); return row; }

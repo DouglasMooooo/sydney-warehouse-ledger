@@ -19,7 +19,7 @@ export async function POST(request: Request) {
         ? 'ADJUSTMENT_MANAGE' : body.workflow === 'RETURN_REPAIR' ? 'RETURN_CONFIRM' : 'WORK_ORDER_CONFIRM';
     const auth = authenticateWarehouseRequest(request, permission);
     expensiveOperationLimiter.check(`write:${auth.user.userId}`, 8, 60_000);
-    const result = await executeControlledLedgerOperation(body, warehouseReadAdapterFromEnv(), openApiLedgerWriterFromEnv());
+    const result = await executeControlledLedgerOperation(body, warehouseReadAdapterFromEnv(), openApiLedgerWriterFromEnv(), process.env, { createdBy: auth.user.userId });
     return NextResponse.json(apiSuccess(result));
   } catch (error) {
     const safe = clientSafeError(error);

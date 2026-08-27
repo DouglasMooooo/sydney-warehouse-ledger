@@ -15,7 +15,7 @@ export async function POST(request: Request) {
     expensiveOperationLimiter.check(`outbound-reversal:${auth.user.userId}`, 6, 60_000);
     const adapter = warehouseReadAdapterFromEnv();
     const result = body.mode === 'confirm'
-      ? await confirmOutboundReversal(body, adapter, openApiLedgerWriterFromEnv())
+      ? await confirmOutboundReversal(body, adapter, openApiLedgerWriterFromEnv(), process.env, { createdBy: auth.user.userId })
       : await previewOutboundReversal(body, adapter);
     return NextResponse.json(apiSuccess(result));
   } catch (error) {

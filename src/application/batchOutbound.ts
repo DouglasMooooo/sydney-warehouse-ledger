@@ -1,5 +1,5 @@
 import type { WarehouseReadPort } from './contracts.js';
-import type { OpenApiLedgerWriter, ConfirmedOpenApiWrite } from '../feishu/openApiLedgerWriter.js';
+import type { OpenApiLedgerWriter, ConfirmedOpenApiWrite, WarehouseLedgerWriteContext } from '../feishu/openApiLedgerWriter.js';
 import { prepareInventoryWorkflow, type InventoryWorkflowPreview } from './inventoryActionEngine.js';
 import { assertBusinessMutationAllowed } from '../safety/readOnlyRelease.js';
 
@@ -35,9 +35,9 @@ export async function confirmBatchOutbound(
   input: BatchOutboundInput,
   port: WarehouseReadPort,
   writer: Pick<OpenApiLedgerWriter, 'append'>,
-  env: Readonly<Record<string, string | undefined>> = process.env,
+  env: Readonly<Record<string, string | undefined>> = process.env, context?: WarehouseLedgerWriteContext,
 ): Promise<ConfirmedOpenApiWrite> {
   assertBusinessMutationAllowed(env);
   const preview = await previewBatchOutbound(input, port);
-  return writer.append(preview.rows);
+  return writer.append(preview.rows, context);
 }

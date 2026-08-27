@@ -21,7 +21,8 @@
     "test:feishu-date": "tsx src/scripts/verifyDateWrite.ts",
     "test:work-orders-private": "tsx src/scripts/testPrivateWorkOrders.ts",
     "uat:openapi-parity": "tsx src/scripts/validateOpenApiParity.ts",
-    "uat:feishu-config-check": "tsx src/scripts/checkFeishuUatConfig.ts"
+    "uat:feishu-config-check": "tsx src/scripts/checkFeishuUatConfig.ts",
+    "deploy:feishu:check": "tsx src/scripts/checkFeishuUatConfig.ts && tsx src/scripts/checkFeishuLedgerWriteSchema.ts"
   },
   "devDependencies": {
     "@types/node": "^24.3.0",

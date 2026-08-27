@@ -41,6 +41,9 @@ export function clientSafeError(error: unknown): ApiErrorContract {
     INVALID_AUDIT_DATE_RANGE: '开始日期不能晚于结束日期。',
     INVALID_AUDIT_LIMIT: '查询结果数量必须在 1 到 10000 之间。',
     INVALID_INVENTORY_FILTER: '库存查询条件无效，请检查料号、机型、库位或库存属性。',
+    OPERATIONAL_LEDGER_SCHEMA_MISMATCH: '飞书库存流水表的表头与已批准的台账结构不一致，已阻止写入。',
+    PARTIAL_IDEMPOTENCY_CONFLICT: '该操作存在未完整确认的写入记录，已阻止重复提交，请联系管理员核对操作记录。',
+    DUPLICATE_MOVEMENT_COMMAND: '本次确认包含重复的业务动作，已阻止写入。',
   };
   for (const [code, safeMessage] of Object.entries(workflowErrors)) {
     if (message.includes(code)) return { code, message: safeMessage };

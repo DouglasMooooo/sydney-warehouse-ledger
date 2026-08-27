@@ -15,7 +15,7 @@ export async function POST(request: Request) {
     expensiveOperationLimiter.check(`batch-outbound:${auth.user.userId}`, 8, 60_000);
     const adapter = warehouseReadAdapterFromEnv();
     const result = body.mode === 'confirm'
-      ? await confirmBatchOutbound(body, adapter, openApiLedgerWriterFromEnv())
+      ? await confirmBatchOutbound(body, adapter, openApiLedgerWriterFromEnv(), process.env, { createdBy: auth.user.userId })
       : await previewBatchOutbound(body, adapter);
     return NextResponse.json(apiSuccess(result));
   } catch (error) {

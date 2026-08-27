@@ -50,3 +50,29 @@ export const LEDGER_COLUMNS = {
   stockCondition: 'P',
   remark: 'V',
 } as const satisfies Record<string, BusinessColumn>;
+
+/** Header guard for the operational ledger. The position mapping is centralized
+ * here so a changed Feishu sheet cannot silently receive data in a wrong column. */
+export const MAIN_LEDGER_FIELDS = {
+  A: ['日期', 'Date'], B: ['实际出库日', 'Actual Outbound Date'], C: ['动作', 'Action'],
+  D: ['ERP SH单号', 'SH单号', 'SH No'], E: ['取货码', 'Pickup Code'], F: ['容器码', 'Container Code'],
+  G: ['料号', 'SKU'], J: ['机器唯一码（SN）', '机器唯一码', 'SN'], K: ['数量', 'Qty'],
+  L: ['来源库位', 'From Location'], M: ['目标库位', 'To Location'], N: ['ERP仓库选择', 'ERP仓库', 'ERP Warehouse'],
+  P: ['库存属性', 'Stock Condition'], V: ['备注', 'Remark'],
+} as const satisfies Partial<Record<BusinessColumn, readonly string[]>>;
+
+export function assertMainLedgerSchema(headers: readonly string[]): void {
+  for (const [column, accepted] of Object.entries(MAIN_LEDGER_FIELDS)) {
+    const index = columnToIndex(column);
+    const actual = String(headers[index] ?? '').trim();
+    if (!accepted.some((candidate) => candidate === actual)) {
+      throw new Error(`OPERATIONAL_LEDGER_SCHEMA_MISMATCH:${column}`);
+    }
+  }
+}
+
+function columnToIndex(column: string): number {
+  let result = 0;
+  for (const character of column) result = result * 26 + character.charCodeAt(0) - 64;
+  return result - 1;
+}

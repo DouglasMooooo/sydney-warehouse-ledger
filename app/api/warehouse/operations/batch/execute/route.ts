@@ -13,7 +13,7 @@ export async function POST(request: Request) {
     const body = await request.json() as ControlledBatchTransferInput;
     const auth = authenticateWarehouseRequest(request, 'MOVE_CONFIRM');
     expensiveOperationLimiter.check(`batch-transfer-write:${auth.user.userId}`, 5, 60_000);
-    return NextResponse.json(apiSuccess(await executeControlledBatchTransfer(body, warehouseReadAdapterFromEnv(), openApiLedgerWriterFromEnv())));
+    return NextResponse.json(apiSuccess(await executeControlledBatchTransfer(body, warehouseReadAdapterFromEnv(), openApiLedgerWriterFromEnv(), process.env, { createdBy: auth.user.userId })));
   } catch (error) {
     const safe = clientSafeError(error);
     console.error('Batch transfer write failed', serverSafeErrorSummary(error));

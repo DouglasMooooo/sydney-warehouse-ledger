@@ -1,4 +1,5 @@
-import { BUSINESS_COLUMNS, PROTECTED_COLUMNS } from '../config/ledgerSchema.js';
+import { createHash } from 'node:crypto';
+import { assertMainLedgerSchema, BUSINESS_COLUMNS, PROTECTED_COLUMNS } from '../config/ledgerSchema.js';
 import type { LedgerWriteInput, ProposedLedgerCell } from '../ledger/typedWrite.js';
 import { prepareLedgerWrite } from '../ledger/typedWrite.js';
 import { requiredEnv } from './client.js';
@@ -6,7 +7,10 @@ import { openApiClientFromEnv, type FeishuOpenApiClient } from './openApiClient.
 import { FeishuOpenApiWarehouseSheetReader } from './sheetReader.js';
 import type { WarehouseSheetReader } from './sheetReader.js';
 
-export interface ConfirmedOpenApiWrite { rows: number[]; verified: true; reconciliation: 'PASS' }
+export type LedgerWriteStatus = 'VERIFIED' | 'ALREADY_COMMITTED' | 'WRITE_UNVERIFIED';
+export interface ConfirmedOpenApiWrite { rows: number[]; verified: true; reconciliation: 'PASS'; status?: LedgerWriteStatus; movementIds?: string[] }
+export interface WarehouseLedgerWriteContext { createdBy: string }
+export interface WarehouseLedgerWritePort { append(inputs: readonly LedgerWriteInput[], context?: WarehouseLedgerWriteContext): Promise<ConfirmedOpenApiWrite> }
 
 const COLUMN_INDEX = Object.fromEntries(Array.from({ length: 29 }, (_, index) => [columnName(index + 1), index])) as Record<string, number>;
 
@@ -18,12 +22,23 @@ export class OpenApiLedgerWriter {
     private readonly reader: WarehouseSheetReader,
   ) {}
 
-  async append(inputs: readonly LedgerWriteInput[]): Promise<ConfirmedOpenApiWrite> {
+  async append(inputs: readonly LedgerWriteInput[], context?: WarehouseLedgerWriteContext): Promise<ConfirmedOpenApiWrite> {
     if (!inputs.length || inputs.length > 100) throw new TypeError('一次写入必须包含 1–100 行。');
-    const prepared = inputs.map((input) => prepareLedgerWrite(input, false));
+    const initiallyPrepared = inputs.map((input) => prepareLedgerWrite(input, false));
+    const initialInvalid = initiallyPrepared.find((item) => !item.ok);
+    if (initialInvalid) throw new TypeError(`LEDGER_VALIDATION_FAILED:${initialInvalid.errors.map((item) => item.code).join(',')}`);
+    const identities = initiallyPrepared.map((item) => createMovementIdentity(item.normalized!));
+    if (new Set(identities.map((item) => item.idempotencyKey)).size !== identities.length) throw new TypeError('DUPLICATE_MOVEMENT_COMMAND');
+    const decoratedInputs = context ? inputs.map((input, index) => ({ ...input, remark: appendSystemMarker(String(input.remark ?? ''), identities[index]!, context.createdBy) })) : inputs;
+    const prepared = decoratedInputs.map((input) => prepareLedgerWrite(input, false));
     const invalid = prepared.find((item) => !item.ok);
     if (invalid) throw new TypeError(`LEDGER_VALIDATION_FAILED:${invalid.errors.map((item) => item.code).join(',')}`);
+    const schema = await this.reader.readTable({ sheetId: this.sheetId, range: 'A1:AC1' });
+    assertMainLedgerSchema(schema.columns);
     const table = await this.reader.readTable({ sheetId: this.sheetId, noHeader: true });
+    const committed = findCommittedRows(table.data, identities.map((item) => item.idempotencyKey));
+    if (committed.length === identities.length) return { rows: committed, verified: true, reconciliation: 'PASS', status: 'ALREADY_COMMITTED', movementIds: identities.map((item) => item.movementId) };
+    if (committed.length) throw new Error('PARTIAL_IDEMPOTENCY_CONFLICT');
     const firstRow = nextBlankBusinessRow(table.data);
     const rows = inputs.map((_, index) => firstRow + index);
     const targetRange = `A${firstRow}:AC${rows[rows.length - 1]!}`;
@@ -41,14 +56,21 @@ export class OpenApiLedgerWriter {
     for (const date of dated) await this.client.put(`/open-apis/sheets/v2/spreadsheets/${encodeURIComponent(this.spreadsheetToken)}/style`, {
       appendStyle: { range: date.range, style: { formatter: 'yyyy-mm-dd' } },
     });
-    await this.client.post(`/open-apis/sheets/v2/spreadsheets/${encodeURIComponent(this.spreadsheetToken)}/values_batch_update`, { valueRanges });
+    try {
+      await this.client.post(`/open-apis/sheets/v2/spreadsheets/${encodeURIComponent(this.spreadsheetToken)}/values_batch_update`, { valueRanges });
+    } catch (error) {
+      const reread = await this.reader.readTable({ sheetId: this.sheetId, noHeader: true });
+      const recovered = findCommittedRows(reread.data, identities.map((item) => item.idempotencyKey));
+      if (recovered.length === identities.length) return { rows: recovered, verified: true, reconciliation: 'PASS', status: 'VERIFIED', movementIds: identities.map((item) => item.movementId) };
+      throw error;
+    }
 
     const afterRaw = await this.readRange(targetRange, 'UnformattedValue');
     const afterFormatted = await this.readRange(targetRange, 'FormattedValue');
     const afterFormula = await this.readRange(targetRange, 'Formula');
     prepared.forEach((item, offset) => verifyPreparedRow(item.proposedCells, afterRaw[offset] ?? [], afterFormatted[offset] ?? []));
     verifyProtectedUnchanged(beforeFormula, afterFormula);
-    return { rows, verified: true, reconciliation: 'PASS' };
+    return { rows, verified: true, reconciliation: 'PASS', ...(context ? { status: 'VERIFIED' as const, movementIds: identities.map((item) => item.movementId) } : {}) };
   }
 
   private async readRange(range: string, option: 'UnformattedValue' | 'FormattedValue' | 'Formula'): Promise<unknown[][]> {
@@ -58,6 +80,29 @@ export class OpenApiLedgerWriter {
     );
     return data.valueRange?.values ?? [];
   }
+}
+
+interface MovementIdentity { movementId: string; idempotencyKey: string }
+
+export function createMovementIdentity(input: NonNullable<ReturnType<typeof prepareLedgerWrite>['normalized']>): MovementIdentity {
+  const stable = JSON.stringify({ date: input.date, outboundDate: input.outboundDate, action: input.action, shNo: input.shNo, pickupCode: input.pickupCode, sku: input.sku, sn: input.sn, qty: input.qty, fromLocation: input.fromLocation, toLocation: input.toLocation, erpWarehouse: input.erpWarehouse, stockCondition: input.stockCondition });
+  const digest = createHash('sha256').update(stable).digest('hex').slice(0, 20).toUpperCase();
+  return { movementId: `MOV-${digest}`, idempotencyKey: `IDEM-${digest}` };
+}
+
+function appendSystemMarker(remark: string, identity: MovementIdentity, createdBy: string): string {
+  const humanRemark = remark.trim();
+  const operator = createdBy.trim().replace(/[\r\n\t;=]/g, '').slice(0, 100) || 'UNKNOWN_OPERATOR';
+  return `${humanRemark ? `${humanRemark}\n` : ''}[SYSTEM_NATIVE] movementId=${identity.movementId}; idempotencyKey=${identity.idempotencyKey}; createdBy=${operator}; createdAt=${new Date().toISOString()}; source=WAREHOUSE_APP`;
+}
+
+function findCommittedRows(rows: readonly unknown[][], keys: readonly string[]): number[] {
+  const rowByKey = new Map<string, number>();
+  rows.forEach((row, index) => {
+    const remark = String(row[COLUMN_INDEX.V!] ?? '');
+    for (const key of keys) if (remark.includes(`idempotencyKey=${key}`)) rowByKey.set(key, index + 1);
+  });
+  return keys.map((key) => rowByKey.get(key)).filter((row): row is number => row !== undefined);
 }
 
 function nextBlankBusinessRow(data: Array<Array<unknown>>): number {

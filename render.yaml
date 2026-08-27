@@ -5,6 +5,8 @@ services:
     plan: starter
     healthCheckPath: /api/health
     envVars:
+      - key: DEPLOYMENT_MODE
+        value: FEISHU_UAT
       - key: FEISHU_READ_ADAPTER
         value: openapi
       - key: READ_ONLY_RELEASE
