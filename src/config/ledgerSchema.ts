@@ -58,7 +58,7 @@ export const MAIN_LEDGER_FIELDS = {
   D: ['ERP SH单号', 'SH单号', 'SH No'], E: ['取货码', 'Pickup Code'], F: ['容器码', 'Container Code'],
   G: ['料号', 'SKU'], J: ['机器唯一码（SN）', '机器唯一码', 'SN'], K: ['数量', 'Qty'],
   L: ['来源库位', 'From Location'], M: ['目标库位', 'To Location'], N: ['ERP仓库选择', 'ERP仓库', 'ERP Warehouse'],
-  P: ['库存属性', 'Stock Condition'], V: ['备注', 'Remark'],
+  P: ['库存属性', '库存属性（必填）', 'Stock Condition'], V: ['备注', 'Remark'],
 } as const satisfies Partial<Record<BusinessColumn, readonly string[]>>;
 
 export function assertMainLedgerSchema(headers: readonly string[]): void {

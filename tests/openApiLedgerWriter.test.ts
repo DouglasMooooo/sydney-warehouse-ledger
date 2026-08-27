@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createMovementIdentity, nextAppendBusinessRow, OpenApiLedgerWriter, parseSystemLedgerMarker } from '../src/feishu/openApiLedgerWriter.js';
+import { assertMainLedgerSchema } from '../src/config/ledgerSchema.js';
 import { prepareLedgerWrite } from '../src/ledger/typedWrite.js';
 import type { WarehouseSheetReader } from '../src/feishu/sheetReader.js';
 import type { FeishuOpenApiClient } from '../src/feishu/openApiClient.js';
@@ -43,6 +44,12 @@ test('writer fails closed on header mismatch and treats an existing idempotency 
   assert.equal(result.status,'ALREADY_COMMITTED'); assert.equal(posts,0); assert.deepEqual(result.rows,[2]);
   const invalidReader:WarehouseSheetReader={async readTable(){return{name:'main',range:'A1',columns:[],data:[],dtypes:{}};},async healthCheck(){return true;}};
   await assert.rejects(()=>new OpenApiLedgerWriter('token','main',client,invalidReader).append([input],{createdBy:'u1',commandId}),/OPERATIONAL_LEDGER_SCHEMA_MISMATCH/);
+});
+
+test('approved UAT required-stock-condition header remains a valid ledger schema', () => {
+  const uatHeaders = headers();
+  uatHeaders[15] = '库存属性（必填）';
+  assert.doesNotThrow(() => assertMainLedgerSchema(uatHeaders));
 });
 
 test('true append ordering keeps historical gaps untouched and command identities separate equal business commands', () => {
