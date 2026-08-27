@@ -8,7 +8,7 @@ export default async function WarehouseLayout({ children }: Readonly<{ children:
   const deploymentMode=getDeploymentMode();
   return (
     <div className="app-shell">
-      <header className="app-topbar"><div className="wordmark"><strong>FOX</strong><small>ESS</small></div><div className="product-name">Sydney Warehouse</div><WarehouseNav/><div className="topbar-meta"><span className="uat-chip">{deploymentMode==='FEISHU_UAT'?'FEISHU UAT':'UAT 受控写入'}</span><span>Sydney</span></div><form action="/api/auth/logout" method="post"><button className="topbar-logout" type="submit">退出</button></form></header>
+      <header className="app-topbar"><div className="wordmark"><strong>FOX</strong><small>ESS</small></div><div className="product-name">Sydney Warehouse</div><WarehouseNav/><div className="topbar-meta"><span className="uat-chip">Sydney Warehouse · {deploymentMode==='FEISHU_UAT'?'UAT':'受控写入'}</span><span>Sydney</span></div><form action="/api/auth/logout" method="post"><button className="topbar-logout" type="submit">退出</button></form></header>
       <main className="content-shell">{children}</main>
     </div>
   );

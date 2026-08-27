@@ -3,6 +3,7 @@ services:
     name: sydney-warehouse-ledger-uat
     runtime: docker
     plan: starter
+    numInstances: 1
     healthCheckPath: /api/health
     envVars:
       - key: DEPLOYMENT_MODE

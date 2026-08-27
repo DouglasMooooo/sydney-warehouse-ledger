@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { assertMainLedgerSchema, BUSINESS_COLUMNS, PROTECTED_COLUMNS } from '../config/ledgerSchema.js';
 import type { LedgerWriteInput, ProposedLedgerCell } from '../ledger/typedWrite.js';
 import { prepareLedgerWrite } from '../ledger/typedWrite.js';
@@ -6,6 +6,7 @@ import { requiredEnv } from './client.js';
 import { openApiClientFromEnv, type FeishuOpenApiClient } from './openApiClient.js';
 import { FeishuOpenApiWarehouseSheetReader } from './sheetReader.js';
 import type { WarehouseSheetReader } from './sheetReader.js';
+import { operationalLedgerWriteMutex } from './ledgerWriteMutex.js';
 
 export type LedgerWriteStatus = 'VERIFIED' | 'ALREADY_COMMITTED' | 'WRITE_UNVERIFIED';
 export interface ConfirmedOpenApiWrite { rows: number[]; verified: true; reconciliation: 'PASS'; status?: LedgerWriteStatus; movementIds?: string[] }
@@ -24,6 +25,10 @@ export class OpenApiLedgerWriter {
   ) {}
 
   async append(inputs: readonly LedgerWriteInput[], context?: WarehouseLedgerWriteContext): Promise<ConfirmedOpenApiWrite> {
+    return operationalLedgerWriteMutex.runExclusive(() => this.appendUnlocked(inputs, context));
+  }
+
+  private async appendUnlocked(inputs: readonly LedgerWriteInput[], context?: WarehouseLedgerWriteContext): Promise<ConfirmedOpenApiWrite> {
     if (!inputs.length || inputs.length > 100) throw new TypeError('一次写入必须包含 1–100 行。');
     const initiallyPrepared = inputs.map((input) => prepareLedgerWrite(input, false));
     const initialInvalid = initiallyPrepared.find((item) => !item.ok);
@@ -85,7 +90,7 @@ export class OpenApiLedgerWriter {
 
 export interface MovementIdentity { commandId: string; movementId: string; idempotencyKey: string; sourceFingerprint: string }
 
-export function createMovementIdentity(input: NonNullable<ReturnType<typeof prepareLedgerWrite>['normalized']>, commandId = `CMD-${crypto.randomUUID()}`, index = 0): MovementIdentity {
+export function createMovementIdentity(input: NonNullable<ReturnType<typeof prepareLedgerWrite>['normalized']>, commandId = `CMD-${randomUUID()}`, index = 0): MovementIdentity {
   const stable = JSON.stringify({ date: input.date, outboundDate: input.outboundDate, action: input.action, shNo: input.shNo, pickupCode: input.pickupCode, sku: input.sku, sn: input.sn, qty: input.qty, fromLocation: input.fromLocation, toLocation: input.toLocation, erpWarehouse: input.erpWarehouse, stockCondition: input.stockCondition });
   const sourceFingerprint = createHash('sha256').update(stable).digest('hex').slice(0, 20).toUpperCase();
   const execution = createHash('sha256').update(`${commandId}:${index}`).digest('hex').slice(0, 20).toUpperCase();
@@ -150,7 +155,7 @@ function verifyProtectedUnchanged(before: unknown[][], after: unknown[][]): void
 }
 
 function blank(value: unknown): boolean { return value === undefined || value === null || value === ''; }
-function resolveCommandId(value: string | undefined): string { if (value === undefined) return `CMD-${crypto.randomUUID()}`; if (!/^CMD-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value)) throw new TypeError('INVALID_COMMAND_ID'); return value.toUpperCase(); }
+function resolveCommandId(value: string | undefined): string { if (value === undefined) return `CMD-${randomUUID()}`; if (!/^CMD-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value)) throw new TypeError('INVALID_COMMAND_ID'); return value.toUpperCase(); }
 function columnName(index: number): string { let value = '', current = index; while (current > 0) { current -= 1; value = String.fromCharCode(65 + current % 26) + value; current = Math.floor(current / 26); } return value; }
 function dateSerialToIso(serial: number): string { return new Date(Date.UTC(1899, 11, 30) + serial * 86_400_000).toISOString().slice(0, 10); }
 
