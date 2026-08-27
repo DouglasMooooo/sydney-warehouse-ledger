@@ -31,7 +31,7 @@ class StaticTransportReader implements WarehouseSheetReader {
 }
 
 test('lark-cli and OpenAPI transport boundaries produce identical logical warehouse reads', async () => {
-  const config = { spreadsheetUrl: 'local-only', mainSheetId: 'main-id', currentInventorySheetId: 'inventory-id' };
+  const config = { spreadsheetUrl: 'local-only', mainSheetId: 'main-id', currentInventorySheetId: 'inventory-id', currentInventoryAuthorityMode: 'EXPLICIT_BASELINE' as const, currentInventoryBaselineEffectiveDate: '2026-08-19' };
   const local = new FeishuWarehouseReadAdapter(config, new StaticTransportReader('lark-cli'));
   const hosted = new FeishuWarehouseReadAdapter(config, new StaticTransportReader('openapi'));
   const date = parseBusinessDateString('2026-08-20')!;
@@ -52,7 +52,7 @@ test('lark-cli and OpenAPI transport boundaries produce identical logical wareho
   const resolverContext = await local.readSnResolverContext(['60HD103064PM133']);
   assert.equal(resolverContext.verifiedMappings[0]?.materialCode, '00123');
   assert.equal(resolverContext.verifiedMappings[0]?.canonicalSn, '60HD103*64PM133');
-  assert.equal(resolverContext.operationalStates[0]?.currentState, 'PREPARED');
+  assert.equal(resolverContext.operationalStates[0]?.currentState, 'UNKNOWN');
   const repairedEncodingContext = await local.readSnResolverContext(['60HD103R64PM133']);
   assert.equal(repairedEncodingContext.verifiedMappings[0]?.materialCode, '00123');
   assert.equal(repairedEncodingContext.verifiedMappings[0]?.canonicalSn, '60HD103*64PM133');
@@ -62,7 +62,7 @@ test('legacy/manual rows remain available to audit but never create current task
   const legacyRow = [...mainRow];
   legacyRow[2] = '备货'; legacyRow[9] = 'LEGACY-SN-1'; legacyRow[21] = 'Import reference: historical spreadsheet import';
   const main = typed('主表', mainHeader, [mainHeader, legacyRow]);
-  const adapter = new FeishuWarehouseReadAdapter({ spreadsheetUrl: 'local-only', mainSheetId: 'main-id', currentInventorySheetId: 'inventory-id' }, new StaticTransportReader('openapi', main));
+  const adapter = new FeishuWarehouseReadAdapter({ spreadsheetUrl: 'local-only', mainSheetId: 'main-id', currentInventorySheetId: 'inventory-id', currentInventoryAuthorityMode: 'EXPLICIT_BASELINE', currentInventoryBaselineEffectiveDate: '2026-08-19' }, new StaticTransportReader('openapi', main));
   const date = parseBusinessDateString('2026-08-20')!;
   const records = await adapter.readLedgerRecords({ sn: 'LEGACY-SN-1' });
   assert.equal(records.length, 1);

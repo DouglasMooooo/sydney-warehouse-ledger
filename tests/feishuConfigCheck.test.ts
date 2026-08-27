@@ -7,6 +7,7 @@ const env = {
   FEISHU_MAIN_SHEET_ID: 'private-main-sheet', FEISHU_CURRENT_INVENTORY_SHEET_ID: 'private-inventory-sheet', FEISHU_OAUTH_REDIRECT_URI: 'https://uat.example.test/api/auth/feishu/callback',
   WAREHOUSE_SESSION_SECRET: 'x'.repeat(32), WAREHOUSE_ADMIN_USERS: 'private-admin', WAREHOUSE_OPERATOR_USERS: 'private-operator', WAREHOUSE_READ_ONLY_USERS: 'private-reader',
   READ_ONLY_RELEASE: 'true', APP_VERSION: 'test-version',
+  CURRENT_INVENTORY_AUTHORITY_MODE: 'EXPLICIT_BASELINE', CURRENT_INVENTORY_BASELINE_EFFECTIVE_DATE: '2026-08-26',
 };
 
 test('Feishu config checker proves token, metadata, document access, and tiny range without leaking values', async () => {

@@ -26,6 +26,10 @@ services:
         sync: false
       - key: FEISHU_CURRENT_INVENTORY_SHEET_ID
         sync: false
+      - key: CURRENT_INVENTORY_AUTHORITY_MODE
+        sync: false
+      - key: CURRENT_INVENTORY_BASELINE_EFFECTIVE_DATE
+        sync: false
       - key: FEISHU_OAUTH_REDIRECT_URI
         sync: false
       - key: WAREHOUSE_SESSION_SECRET

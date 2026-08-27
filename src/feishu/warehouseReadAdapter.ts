@@ -24,6 +24,7 @@ import { DefaultMigrationPolicy } from '../domain/movement/migrationPolicy.js';
 import { DeterministicSnLifecycleReplayService } from '../domain/sn/snLifecycleReplay.js';
 import type { CurrentSnState } from '../domain/sn/types.js';
 import { reversedOutboundLedgerRow } from '../application/outboundReversalMarker.js';
+import { CurrentInventoryProjectionService, assertAuthoritativeBaseline, type CurrentInventorySourceType } from '../application/currentInventoryProjection.js';
 
 const MAIN = {
   date: 0, outboundDate: 1, action: 2, sh: 3, pickup: 4, container: 5,
@@ -31,11 +32,14 @@ const MAIN = {
   erpWarehouse: 13, stockCondition: 15, remark: 21,
 } as const;
 const MOVEMENT_PROJECTOR=new DeterministicMovementProjectionService(new DefaultMigrationPolicy());
+const CURRENT_INVENTORY_PROJECTOR = new CurrentInventoryProjectionService();
 
 export interface FeishuWarehouseReadConfig {
   spreadsheetUrl: string;
   mainSheetId: string;
   currentInventorySheetId: string;
+  currentInventoryAuthorityMode?: CurrentInventorySourceType;
+  currentInventoryBaselineEffectiveDate?: string;
 }
 
 export class FeishuWarehouseReadAdapter implements WarehouseReadPort, MovementReadPort {
@@ -45,7 +49,7 @@ export class FeishuWarehouseReadAdapter implements WarehouseReadPort, MovementRe
   ) {}
 
   async readCurrentInventory(): Promise<InventoryCandidate[]> {
-    return parseInventoryRecords(await this.readInventory()).records;
+    return (await this.currentInventorySnapshot()).records;
   }
 
   async readLedgerRecords(query: MovementQuery = {}): Promise<OperationalLedgerRecord[]> {
@@ -54,16 +58,15 @@ export class FeishuWarehouseReadAdapter implements WarehouseReadPort, MovementRe
   }
 
   async readDashboardSource(asOf: BusinessDate): Promise<DashboardSnapshot> {
-    const [main, inventory, validLocations] = await Promise.all([this.readMain(), this.readInventory(), this.readValidLocations()]);
+    const [main, snapshot, validLocations] = await Promise.all([this.readMain(), this.currentInventorySnapshot(), this.readValidLocations()]);
     const mainRows = currentOperationalEntries(main).map((item) => item.row);
-    const inventoryModel = parseInventoryRecords(inventory);
-    const inventoryRows = inventoryModel.records;
+    const inventoryRows = snapshot.records;
     const prepared = mainRows.filter((row) => text(row[MAIN.action]) === '备货');
     const returns = mainRows.filter((row) => text(row[MAIN.action]) === '退回维修');
     const shipped = mainRows.filter((row) => text(row[MAIN.action]) === '出库');
     const operationalRows = currentOperationalEntries(main).map(({ row, ledgerRow }) => toOperationalLedgerRow(row, ledgerRow));
     const tasks = deriveTodayTasks(operationalRows, asOf);
-    const rawInventory = rawInventoryRecords(inventory);
+    const rawInventory = locationRecordsFromCandidates(inventoryRows);
     const inventorySummary = summarizeLocations(rawInventory);
     const dashboardExceptions = [
       ...deriveLedgerExceptions(operationalRows, validLocations),
@@ -165,7 +168,7 @@ export class FeishuWarehouseReadAdapter implements WarehouseReadPort, MovementRe
     qty: number,
   ): Promise<InventoryCandidate[]> {
     void qty;
-    return parseInventoryRecords(await this.readInventory()).records.filter((item) =>
+    return (await this.currentInventorySnapshot()).records.filter((item) =>
       item.sku === sku && item.condition === stockCondition && item.availableQty > 0);
   }
 
@@ -175,17 +178,15 @@ export class FeishuWarehouseReadAdapter implements WarehouseReadPort, MovementRe
 
   async findCurrentSerializedInventory(rawSn: string): Promise<CurrentSerializedInventory | undefined> {
     const sn = normalizeSn(rawSn);
-    const projected=MOVEMENT_PROJECTOR.projectLedgerRecords(await this.readLedgerRecords({sn})).movements;
-    return currentSerializedFromMovements(sn,projected);
+    const snapshot = await this.currentInventorySnapshot();
+    return currentSerializedFromState(sn, snapshot.serializedStates.get(canonicalizeSn(sn)));
   }
 
   async findCurrentSerializedInventoryBatch(rawSns: string[]): Promise<CurrentSerializedInventory[]> {
-    const sns=[...new Set(rawSns.map(normalizeSn).filter(Boolean))];
-    const records=await this.readLedgerRecords();
-    return sns.flatMap((sn)=>{
-      const projected=MOVEMENT_PROJECTOR.projectLedgerRecords(records.filter((record)=>movementRecordMatches(record,{sn}))).movements;
-      const current=currentSerializedFromMovements(sn,projected);
-      return current?[current]:[];
+    const snapshot = await this.currentInventorySnapshot();
+    return [...new Set(rawSns.map(normalizeSn).filter(Boolean))].flatMap((sn) => {
+      const current = currentSerializedFromState(sn, snapshot.serializedStates.get(canonicalizeSn(sn)));
+      return current ? [current] : [];
     });
   }
 
@@ -236,8 +237,8 @@ export class FeishuWarehouseReadAdapter implements WarehouseReadPort, MovementRe
   }
 
   async readLocationSummaries(): Promise<{ locations: Array<LocationSummary & { displayText: string }>; issues: ReturnType<typeof summarizeLocations>['issues'] }> {
-    const [inventory, validLocations] = await Promise.all([this.readInventory(), this.readValidLocations()]);
-    const result = summarizeLocations(rawInventoryRecords(inventory));
+    const [snapshot, validLocations] = await Promise.all([this.currentInventorySnapshot(), this.readValidLocations()]);
+    const result = summarizeLocations(locationRecordsFromCandidates(snapshot.records));
     const byLocation = new Map(result.summaries.map((summary) => [summary.location, summary]));
     const locations = [...validLocations].sort((left, right) => left.localeCompare(right));
     return {
@@ -250,8 +251,8 @@ export class FeishuWarehouseReadAdapter implements WarehouseReadPort, MovementRe
   }
 
   async readOperationalExceptions(): Promise<{ exceptions: OperationalException[]; supportedCodes: readonly string[] }> {
-    const [main, inventoryTable, validLocations] = await Promise.all([this.readMain(), this.readInventory(), this.readValidLocations()]);
-    const inventory = rawInventoryRecords(inventoryTable);
+    const [main, snapshot, validLocations] = await Promise.all([this.readMain(), this.currentInventorySnapshot(), this.readValidLocations()]);
+    const inventory = locationRecordsFromCandidates(snapshot.records);
     const rows = currentOperationalEntries(main).map(({ row, ledgerRow }) => toOperationalLedgerRow(row, ledgerRow));
     const summary = summarizeLocations(inventory);
     const exceptions = [
@@ -286,9 +287,10 @@ export class FeishuWarehouseReadAdapter implements WarehouseReadPort, MovementRe
   }
 
   async readSnResolverContext(sns: readonly string[]): Promise<SnResolverContext> {
-    const [main, products] = await Promise.all([
+    const [main, products, snapshot] = await Promise.all([
       this.readMain(),
       this.reader.readTable({ sheetName: '产品库存维护' }),
+      this.currentInventorySnapshot(),
     ]);
     const requested = new Set(sns.map(normalizeSn));
     const requestedCanonical = new Set(sns.map(canonicalizeSn));
@@ -301,9 +303,6 @@ export class FeishuWarehouseReadAdapter implements WarehouseReadPort, MovementRe
     }
     const verifiedMappings: VerifiedSnMapping[] = [];
     const operationalStates: SnOperationalState[] = [];
-    const movementRecords=ledgerRows.map(({row,index})=>toMovementLedgerRecord(row,index+2));
-    const projected=MOVEMENT_PROJECTOR.projectLedgerRecords(movementRecords).movements;
-    const replayService=new DeterministicSnLifecycleReplayService();
     for (const sn of requested) {
       const canonicalSn = canonicalizeSn(sn);
       const history = byCanonical.get(canonicalSn) ?? [];
@@ -318,9 +317,9 @@ export class FeishuWarehouseReadAdapter implements WarehouseReadPort, MovementRe
           verified: true, source: 'LEDGER', createdAt: latestWithMaterial ? businessDate(latestWithMaterial.row[MAIN.date]) : '',
         });
       }
-      const replayed=replayService.replay(sn,projected);
-      operationalStates.push({sn,currentState:legacyOperationalState(replayed.currentState,replayed.lifecycle.at(-1)?.action),previouslyOutbound:replayed.lifecycle.some(item=>item.action==='OUTBOUND'||item.action==='出库'),
-        ...(replayed.lifecycle.at(-1)?.action?{latestAction:replayed.lifecycle.at(-1)!.action}:{}),reason:`Deterministic movement replay: ${replayed.replayStatus}.`});
+      const current = snapshot.serializedStates.get(canonicalSn);
+      operationalStates.push({ sn, currentState: current ? legacyOperationalState(current) : 'UNKNOWN', previouslyOutbound: current?.status === 'OUTBOUND',
+        reason: current ? 'Authoritative baseline plus SYSTEM_NATIVE replay.' : 'No authoritative serialized current state was found.' });
     }
     const skuIndex = columnIndex(products, ['SKU', '料号', '物料号', '产品料号']);
     const modelIndex = optionalColumnIndex(products, ['Model', '机型', '型号']);
@@ -343,11 +342,24 @@ export class FeishuWarehouseReadAdapter implements WarehouseReadPort, MovementRe
     });
   }
 
+  private async currentInventorySnapshot() {
+    const sourceType = this.config.currentInventoryAuthorityMode ?? 'UNKNOWN';
+    const effectiveDate = this.config.currentInventoryBaselineEffectiveDate ?? '';
+    assertAuthoritativeBaseline(sourceType, effectiveDate);
+    const [inventory, records] = await Promise.all([this.readInventory(), this.readLedgerRecords()]);
+    return CURRENT_INVENTORY_PROJECTOR.project({ sourceType, effectiveDate, records: parseInventoryRecords(inventory).records }, MOVEMENT_PROJECTOR.projectLedgerRecords(records).movements);
+  }
+
   private async readValidLocations(): Promise<Set<string>> {
     const table = await this.reader.readTable({ sheetName: '库位维护' });
     const location = columnIndex(table, ['库位编码（R-排-列-L/M/R）', '库位编码', 'Location']);
     return new Set(table.data.map((row) => text(row[location])).filter(Boolean));
   }
+}
+
+function currentSerializedFromState(sn: string, state: CurrentSnState | undefined): CurrentSerializedInventory | undefined {
+  if (!state || state.status !== 'IN_STOCK') return undefined;
+  return { sn: state.sn, sku: state.sku, location: state.location, stockCondition: state.stockCondition, currentState: legacyOperationalState(state) };
 }
 
 function currentSerializedFromMovements(sn:string,projected:readonly InventoryMovement[]):CurrentSerializedInventory|undefined{
@@ -357,6 +369,7 @@ function currentSerializedFromMovements(sn:string,projected:readonly InventoryMo
     return {sn:state.sn,sku:state.sku,location:state.location,stockCondition:state.stockCondition,currentState:legacyOperationalState(state),
       ...(movement?.containerCode?{containerCode:movement.containerCode}:{})};
   }
+
   if(state.status==='OUTBOUND'){
     const movement=projected.find(item=>item.movementId===state.lastMovementId),condition=movement?.stockConditionBefore;
     if(!state.sku||!movement?.fromLocation||!condition)return undefined;
@@ -376,6 +389,8 @@ export function warehouseReadAdapterFromEnv(): FeishuWarehouseReadAdapter {
     spreadsheetUrl: process.env.FEISHU_SPREADSHEET_URL?.trim() ?? '',
     mainSheetId: requiredEnv('FEISHU_MAIN_SHEET_ID'),
     currentInventorySheetId: requiredEnv('FEISHU_CURRENT_INVENTORY_SHEET_ID'),
+    currentInventoryAuthorityMode: (process.env.CURRENT_INVENTORY_AUTHORITY_MODE?.trim() ?? 'UNKNOWN') as CurrentInventorySourceType,
+    currentInventoryBaselineEffectiveDate: process.env.CURRENT_INVENTORY_BASELINE_EFFECTIVE_DATE?.trim() ?? '',
   };
   return new FeishuWarehouseReadAdapter(config, warehouseSheetReaderFromEnv());
 }
@@ -510,6 +525,10 @@ function mondayOf(date: BusinessDate): string {
   const day = value.getUTCDay() || 7;
   value.setUTCDate(value.getUTCDate() - day + 1);
   return value.toISOString().slice(0, 10);
+}
+
+function locationRecordsFromCandidates(items: readonly InventoryCandidate[]): LocationInventoryRecord[] {
+  return items.map((item) => ({ location: item.location, sku: item.sku, qty: item.availableQty, ...(item.container ? { container: item.container } : {}) }));
 }
 
 function toMovementLedgerRecord(row:TypedSheetData['data'][number],sourceSequence:number):OperationalLedgerRecord{

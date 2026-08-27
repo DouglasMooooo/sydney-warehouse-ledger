@@ -8,11 +8,12 @@ const valid = {
   FEISHU_MAIN_SHEET_ID: 'main', FEISHU_CURRENT_INVENTORY_SHEET_ID: 'inventory', FEISHU_OAUTH_REDIRECT_URI: 'https://uat.example.test/api/auth/feishu/callback',
   WAREHOUSE_SESSION_SECRET: 'x'.repeat(32), WAREHOUSE_ADMIN_USERS: 'admin', WAREHOUSE_OPERATOR_USERS: 'operator', WAREHOUSE_READ_ONLY_USERS: 'reader',
   READ_ONLY_RELEASE: 'true', APP_VERSION: 'commit-sha',
+  CURRENT_INVENTORY_AUTHORITY_MODE: 'EXPLICIT_BASELINE', CURRENT_INVENTORY_BASELINE_EFFECTIVE_DATE: '2026-08-26',
 };
 
 test('UAT runtime config accepts only complete HTTPS OpenAPI read-only configuration', () => {
   assert.deepEqual(validateUatRuntimeConfig(valid), { mode: 'READ_ONLY_UAT', version: 'commit-sha', oauthRedirectUri: 'https://uat.example.test/api/auth/feishu/callback' });
-  assert.deepEqual(inspectUatRuntimeConfig(valid), { readOnlyRelease: true, authConfigured: true, openApiConfigured: true, rolesConfigured: true, versionConfigured: true });
+  assert.deepEqual(inspectUatRuntimeConfig(valid), { readOnlyRelease: true, authConfigured: true, openApiConfigured: true, rolesConfigured: true, versionConfigured: true, currentInventoryAuthorityConfigured: true });
 });
 
 test('UAT runtime config accepts explicit controlled write mode only with read-only disabled', () => {
