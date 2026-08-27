@@ -1,5 +1,13 @@
 # Feishu UAT human smoke test
 
+## Temporary UAT baseline notice
+
+**THIS IS A TEMPORARY UAT BASELINE.** The current Feishu inventory sheet is
+used only to validate UAT behaviour. It is not production inventory truth. The
+production baseline will be replaced after Google Sheet cleansing,
+reconciliation, formal migration, and a separately recorded production
+effective timestamp.
+
 Do this only after the frozen baseline and exact `CURRENT_INVENTORY_BASELINE_EFFECTIVE_AT` are configured.
 
 1. Choose one real, low-risk SN that genuinely needs a move. Record SKU, current location and stock condition.
