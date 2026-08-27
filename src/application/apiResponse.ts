@@ -37,6 +37,9 @@ export function clientSafeError(error: unknown): ApiErrorContract {
     OUTBOUND_NOT_FOUND_OR_ALREADY_REVERSED: '未找到可回撤的出库记录，或该 SH 已经完成回撤。',
     OUTBOUND_REVERSAL_LIMIT_EXCEEDED: '单次最多回撤 100 条出库流水。',
     OUTBOUND_REVERSAL_STATE_CONFLICT: '至少一台机器的当前状态已变化，不能回撤；请刷新后检查。',
+    AUDIT_QUERY_REQUIRES_ONE_IDENTIFIER: 'SH 和 SN 请一次只查询一个，确保结果精确。',
+    INVALID_AUDIT_DATE_RANGE: '开始日期不能晚于结束日期。',
+    INVALID_AUDIT_LIMIT: '查询结果数量必须在 1 到 10000 之间。',
   };
   for (const [code, safeMessage] of Object.entries(workflowErrors)) {
     if (message.includes(code)) return { code, message: safeMessage };

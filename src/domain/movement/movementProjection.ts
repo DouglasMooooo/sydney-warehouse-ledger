@@ -95,6 +95,6 @@ function copyOptional(target:InventoryMovement,record:OperationalLedgerRecord){
   const occurredAt=record.occurredAt??record.actualOutboundDate;if(occurredAt)target.occurredAt=occurredAt;
   if(record.createdAt)target.createdAt=record.createdAt;if(record.createdBy)target.createdBy=record.createdBy;if(record.sku)target.sku=record.sku;
   if(record.displayName)target.displayName=record.displayName;if(record.fromLocation)target.fromLocation=record.fromLocation;if(record.toLocation)target.toLocation=record.toLocation;
-  if(record.containerCode)target.containerCode=record.containerCode;if(record.shNo)target.shNo=record.shNo;if(record.pickupCode)target.pickupCode=record.pickupCode;
+  if(record.containerCode)target.containerCode=record.containerCode;if(record.erpWarehouse)target.erpWarehouse=record.erpWarehouse;if(record.shNo)target.shNo=record.shNo;if(record.pickupCode)target.pickupCode=record.pickupCode;
   const reason=record.reason??record.remark;if(reason)target.reason=reason;
 }

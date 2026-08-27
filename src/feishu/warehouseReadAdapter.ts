@@ -524,7 +524,7 @@ function toMovementLedgerRecord(row:TypedSheetData['data'][number],sourceSequenc
     ...(businessDate(row[MAIN.outboundDate])?{actualOutboundDate:businessDate(row[MAIN.outboundDate])}:{}),...(text(row[MAIN.sku])?{sku:text(row[MAIN.sku])}:{}),
     ...(text(row[MAIN.model])?{displayName:text(row[MAIN.model])}:{}),...(text(row[MAIN.sn])?{sn:text(row[MAIN.sn])}:{}),...(text(row[MAIN.fromLocation])?{fromLocation:text(row[MAIN.fromLocation])}:{}),
     ...(text(row[MAIN.toLocation])?{toLocation:text(row[MAIN.toLocation])}:{}),...(text(row[MAIN.container])?{containerCode:text(row[MAIN.container])}:{}),
-    ...(text(row[MAIN.sh])?{shNo:text(row[MAIN.sh])}:{}),...(text(row[MAIN.pickup])?{pickupCode:text(row[MAIN.pickup])}:{}),...(remark?{remark,reason:remark}:{}),
+    ...(text(row[MAIN.erpWarehouse])?{erpWarehouse:text(row[MAIN.erpWarehouse])}:{}),...(text(row[MAIN.sh])?{shNo:text(row[MAIN.sh])}:{}),...(text(row[MAIN.pickup])?{pickupCode:text(row[MAIN.pickup])}:{}),...(remark?{remark,reason:remark}:{}),
   };
   if(STOCK_CONDITIONS.includes(condition as StockCondition))record.stockCondition=condition as StockCondition;
   return record;

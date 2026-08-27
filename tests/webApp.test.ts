@@ -204,6 +204,7 @@ test('read and preview routes enforce explicit server permissions', () => {
     'app/api/warehouse/layout/route.ts': 'INVENTORY_READ',
     'app/api/warehouse/work-orders/preview/route.ts': 'WORK_ORDER_PREVIEW',
     'app/api/warehouse/exceptions/deep-scan/route.ts': 'TASK_READ',
+    'app/api/warehouse/audit/route.ts': 'TASK_READ',
   };
   for (const [path, permission] of Object.entries(routes)) {
     const source = readFileSync(path, 'utf8');
@@ -219,6 +220,21 @@ test('XLSX decoder is server-only and the browser sends binary FormData to expli
   assert(client.includes('new FormData()'));
   assert(!client.includes('ExcelJS'));
   assert(!client.includes('file.text()'));
+});
+
+test('audit UI exposes exact SH/SN search and reconciliation export without raw sheet access', () => {
+  const audit = readFileSync('app/(warehouse)/audit/audit-client.tsx', 'utf8');
+  const route = readFileSync('app/api/warehouse/audit/route.ts', 'utf8');
+  const exportRoute = readFileSync('app/api/warehouse/export/route.ts', 'utf8');
+  assert(audit.includes('按 SH 单号'));
+  assert(audit.includes('按 SN'));
+  assert(audit.includes("/api/warehouse/audit?"));
+  assert(audit.includes('scope=reconciliation'));
+  assert(route.includes('LiveLedgerAuditService'));
+  assert(!route.includes('FEISHU_APP_SECRET'));
+  assert(exportRoute.includes("scope') === 'reconciliation'"));
+  assert(exportRoute.includes("'操作台账'"));
+  assert(exportRoute.includes("'当前库存'"));
 });
 
 test('prepared location recommendation prioritizes sufficient FLEX-01 inventory', async () => {

@@ -51,6 +51,7 @@ export interface OperationalLedgerRecord {
   fromLocation?: string;
   toLocation?: string;
   containerCode?: string;
+  erpWarehouse?: string;
   shNo?: string;
   pickupCode?: string;
   reason?: string;
@@ -81,6 +82,7 @@ export interface InventoryMovement {
   fromLocation?: string;
   toLocation?: string;
   containerCode?: string;
+  erpWarehouse?: string;
   shNo?: string;
   pickupCode?: string;
   reason?: string;
