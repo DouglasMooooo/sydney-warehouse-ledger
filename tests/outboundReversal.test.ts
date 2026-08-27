@@ -24,6 +24,7 @@ function port(items: OutboundTransaction[] = [transaction], state: 'OUTBOUND' | 
 test('SH reversal preview restores each active outbound row to its original source with an auditable marker', async () => {
   const result = await previewOutboundReversal({ date: '2026-08-26', shNo: ' sh-2608-001 ' }, port());
   assert.equal(result.operation, 'OUTBOUND_REVERSAL');
+  assert.match(result.commandId, /^CMD-/);
   assert.equal(result.items.length, 1);
   assert.deepEqual(result.rows[0], {
     date: '2026-08-26', action: '库存调增', shNo: 'SH-2608-001', pickupCode: 'SYD-00042',

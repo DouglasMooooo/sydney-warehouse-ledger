@@ -63,7 +63,7 @@ export function WorkOrderPreviewClient({ initialBusinessDate, locations }: { ini
           sku:row.sku,model:row.model,erpWarehouse:row.erpWarehouse,location:draft.location,locationConfirmed:draft.locationConfirmed,
           sns:splitSns(draft.snText),sourceFileName:document.sourceFileName,sourceRow:item.sourceRow,
         };})}));
-      const response=await fetch('/api/warehouse/work-orders/confirm',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({businessDate,workOrders})});
+      const response=await fetch('/api/warehouse/work-orders/confirm',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({businessDate,workOrders,commandId:preview.commandId})});
       const payload=await response.json() as ApiResponse<PreparedBatchConfirmResult>;
       if(!payload.ok) throw new Error(`${payload.error.code} · ${payload.error.message}`);
       setConfirmResult(`已确认 ${payload.data.workOrders.length} 张工单，写入并复核 ${payload.data.rows.length} 行。`);

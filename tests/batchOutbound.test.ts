@@ -12,6 +12,7 @@ const port = {
 test('batch outbound validates each prepared SN and produces one strict outbound row per machine',async()=>{
   const result=await previewBatchOutbound({date:'2026-08-25',outboundDate:'2026-08-25',items:[{reference:'SYD-00001',sn:'60HD103064PM133'},{reference:'SYD-00002',sn:'60HD153064PM134'}]},port);
   assert.equal(result.items,2); assert.equal(result.rows.length,2);
+  assert.match(result.commandId,/^CMD-/);
   assert(result.rows.every(row=>row.action==='出库'&&row.outboundDate==='2026-08-25'&&row.qty===1));
 });
 

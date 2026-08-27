@@ -10,12 +10,13 @@ export const runtime = 'nodejs';
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json() as BatchOutboundInput & { mode?: 'preview' | 'confirm' };
+    const body = await request.json() as BatchOutboundInput & { mode?: 'preview' | 'confirm'; commandId?: string };
     const auth = authenticateWarehouseRequest(request, 'WORK_ORDER_CONFIRM');
     expensiveOperationLimiter.check(`batch-outbound:${auth.user.userId}`, 8, 60_000);
     const adapter = warehouseReadAdapterFromEnv();
+    if (body.mode === 'confirm' && !body.commandId) throw new TypeError('MISSING_COMMAND_ID');
     const result = body.mode === 'confirm'
-      ? await confirmBatchOutbound(body, adapter, openApiLedgerWriterFromEnv(), process.env, { createdBy: auth.user.userId })
+      ? await confirmBatchOutbound(body, adapter, openApiLedgerWriterFromEnv(), process.env, { createdBy: auth.user.userId, commandId: body.commandId! })
       : await previewBatchOutbound(body, adapter);
     return NextResponse.json(apiSuccess(result));
   } catch (error) {

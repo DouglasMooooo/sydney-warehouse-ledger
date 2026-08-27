@@ -9,9 +9,9 @@ const env = {
 };
 
 test('readiness distinguishes configuration from real spreadsheet readability', async () => {
-  const ready = await getReadinessSnapshot(env, async () => true);
-  assert.deepEqual(ready, { ok: true, mode: 'READ_ONLY_UAT', version: 'v1', services: { authConfig: 'ok', openApiConfig: 'ok', ledgerRead: 'ok' } });
-  const degraded = await getReadinessSnapshot(env, async () => false);
+  const ready = await getReadinessSnapshot(env, async () => true, async () => true);
+  assert.deepEqual(ready, { ok: true, mode: 'READ_ONLY_UAT', version: 'v1', services: { authConfig: 'ok', openApiConfig: 'ok', ledgerRead: 'ok', ledgerSchema: 'ok', operationalWrite: 'unavailable' } });
+  const degraded = await getReadinessSnapshot(env, async () => false, async () => true);
   assert.equal(degraded.ok, false);
   assert.equal(degraded.services.ledgerRead, 'unavailable');
   const serialized = JSON.stringify(degraded);
@@ -20,7 +20,7 @@ test('readiness distinguishes configuration from real spreadsheet readability', 
 
 test('readiness does not attempt ledger access when read-only config is unsafe', async () => {
   let called = false;
-  const result = await getReadinessSnapshot({ ...env, READ_ONLY_RELEASE: 'false' }, async () => { called = true; return true; });
+  const result = await getReadinessSnapshot({ ...env, READ_ONLY_RELEASE: 'false' }, async () => { called = true; return true; }, async () => true);
   assert.equal(called, false);
   assert.equal(result.ok, false);
   assert.equal(result.services.openApiConfig, 'unavailable');

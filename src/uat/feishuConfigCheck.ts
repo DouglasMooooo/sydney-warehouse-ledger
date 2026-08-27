@@ -1,4 +1,4 @@
-import { validateUatRuntimeConfig } from '../config/runtimeConfig.js';
+import { validateUatRuntimeConfig, type UatRuntimeConfig } from '../config/runtimeConfig.js';
 
 export type FeishuUatFailureCode =
   | 'UAT_RUNTIME_CONFIG_INVALID'
@@ -16,7 +16,7 @@ export interface FeishuConfigCheckStep {
 
 export interface FeishuConfigCheckResult {
   ok: boolean;
-  mode: 'READ_ONLY_UAT';
+  mode: UatRuntimeConfig['mode'];
   steps: FeishuConfigCheckStep[];
 }
 
@@ -27,7 +27,8 @@ export async function runFeishuConfigCheck(
   fetchImpl: typeof fetch = fetch,
 ): Promise<FeishuConfigCheckResult> {
   const steps: FeishuConfigCheckStep[] = [];
-  try { validateUatRuntimeConfig(env); }
+  let runtime: UatRuntimeConfig;
+  try { runtime = validateUatRuntimeConfig(env); }
   catch { return failedAt(steps, 'runtimeConfig', 'UAT_RUNTIME_CONFIG_INVALID'); }
   steps.push(pass('runtimeConfig'), pass('authCredentials'));
 
@@ -63,7 +64,7 @@ export async function runFeishuConfigCheck(
     return failedAt(steps, 'rangeRead', code);
   }
   steps.push(pass('spreadsheetDocumentAccess'), pass('rangeRead'));
-  return { ok: true, mode: 'READ_ONLY_UAT', steps };
+  return { ok: true, mode: runtime.mode, steps };
 }
 
 interface SafeApiResult { ok: boolean; status: number; code?: number; message: string }

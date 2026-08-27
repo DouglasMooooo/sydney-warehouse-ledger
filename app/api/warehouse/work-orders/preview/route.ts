@@ -8,6 +8,7 @@ import { warehouseReadAdapterFromEnv } from '../../../../../src/feishu/warehouse
 import { ExcelJsWorkbookReader, validateXlsxUpload, XlsxUploadError } from '../../../../../src/workOrders/excelJsReader';
 import { XlsxWorkOrderParser } from '../../../../../src/workOrders/xlsxParser';
 import { operationalRequestLogger } from '../../../../../src/observability/requestLog';
+import { newCommandId } from '../../../../../src/application/commandId';
 
 export const runtime = 'nodejs';
 
@@ -53,7 +54,7 @@ export async function POST(request: Request) {
         line.preview.proposedPreparedRow.pickupCode = pickupCode;
       }
     }
-    const preview: MultiFileWorkOrderPreview = { mode:'PREVIEW_ONLY', zeroWritesPerformed:true, documents,
+    const preview: MultiFileWorkOrderPreview = { commandId: newCommandId(), mode:'PREVIEW_ONLY', zeroWritesPerformed:true, documents,
       summary:{files:documents.length,workOrders:documents.filter(item=>item.sh).length,
         lines:documents.reduce((sum,item)=>sum+item.lines.length,0),errors:documents.reduce((sum,item)=>sum+item.errors.length,0)} };
     log.success();

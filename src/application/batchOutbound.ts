@@ -2,6 +2,7 @@ import type { WarehouseReadPort } from './contracts.js';
 import type { OpenApiLedgerWriter, ConfirmedOpenApiWrite, WarehouseLedgerWriteContext } from '../feishu/openApiLedgerWriter.js';
 import { prepareInventoryWorkflow, type InventoryWorkflowPreview } from './inventoryActionEngine.js';
 import { assertBusinessMutationAllowed } from '../safety/readOnlyRelease.js';
+import { newCommandId } from './commandId.js';
 
 export interface BatchOutboundInput {
   date: string;
@@ -10,13 +11,14 @@ export interface BatchOutboundInput {
 }
 
 export interface BatchOutboundPreview {
+  commandId: string;
   operation: 'BATCH_OUTBOUND';
   items: number;
   rows: InventoryWorkflowPreview['rows'];
   warnings: string[];
 }
 
-export async function previewBatchOutbound(input: BatchOutboundInput, port: WarehouseReadPort): Promise<BatchOutboundPreview> {
+export async function previewBatchOutbound(input: BatchOutboundInput & { commandId?: string }, port: WarehouseReadPort): Promise<BatchOutboundPreview> {
   if (!input.items.length || input.items.length > 100) throw new TypeError('INVALID_BATCH_OUTBOUND_SIZE');
   const seen = new Set<string>();
   const rows: InventoryWorkflowPreview['rows'] = [];
@@ -28,7 +30,7 @@ export async function previewBatchOutbound(input: BatchOutboundInput, port: Ware
     const preview = await prepareInventoryWorkflow({ workflow: 'OUTBOUND', date: input.date, outboundDate: input.outboundDate, reference, sn }, port);
     rows.push(...preview.rows);
   }
-  return { operation: 'BATCH_OUTBOUND', items: input.items.length, rows, warnings: ['确认前可使用“回撤本次选择”返回，不会写入台账。'] };
+  return { commandId: input.commandId?.trim() || newCommandId(), operation: 'BATCH_OUTBOUND', items: input.items.length, rows, warnings: ['确认前可使用“回撤本次选择”返回，不会写入台账。'] };
 }
 
 export async function confirmBatchOutbound(

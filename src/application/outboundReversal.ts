@@ -5,6 +5,7 @@ import { assertBusinessMutationAllowed } from '../safety/readOnlyRelease.js';
 import type { OutboundTransaction, WarehouseReadPort } from './contracts.js';
 import { isOperationalShNumber } from './shNumber.js';
 import { outboundReversalMarker } from './outboundReversalMarker.js';
+import { newCommandId } from './commandId.js';
 
 export interface OutboundReversalInput {
   date: string;
@@ -12,6 +13,7 @@ export interface OutboundReversalInput {
 }
 
 export interface OutboundReversalPreview {
+  commandId: string;
   operation: 'OUTBOUND_REVERSAL';
   shNo: string;
   items: OutboundTransaction[];
@@ -20,7 +22,7 @@ export interface OutboundReversalPreview {
 }
 
 export async function previewOutboundReversal(
-  input: OutboundReversalInput,
+  input: OutboundReversalInput & { commandId?: string },
   port: WarehouseReadPort,
 ): Promise<OutboundReversalPreview> {
   const shNo = normalizeSh(input.shNo);
@@ -62,7 +64,7 @@ export async function previewOutboundReversal(
     if (!prepared.ok) throw new TypeError(`LEDGER_VALIDATION_FAILED:${prepared.errors.map((item) => item.code).join(',')}`);
   }
   return {
-    operation: 'OUTBOUND_REVERSAL', shNo, items, rows,
+    commandId: input.commandId?.trim() || newCommandId(), operation: 'OUTBOUND_REVERSAL', shNo, items, rows,
     warnings: [
       '回撤不会删除原始出库记录；系统会追加受控库存调增流水并保留原始行号，便于审计。',
       '回撤完成后，该 SH 将重新进入待取货队列。',

@@ -35,6 +35,14 @@ test('Feishu config checker stops before network when runtime config is incomple
   assert.equal(result.steps[0]?.failureCode, 'UAT_RUNTIME_CONFIG_INVALID');
 });
 
+test('Feishu config checker reports controlled-write UAT without exposing credentials', async () => {
+  const result = await runFeishuConfigCheck({ ...env, READ_ONLY_RELEASE: 'false', CONTROLLED_WRITE_UAT: 'true' }, sequenced([
+    ok({ tenant_access_token: 'private-tenant-token' }), ok({ sheets: [{}] }), ok({ valueRange: { values: [['header']] } }),
+  ]));
+  assert.equal(result.ok, true);
+  assert.equal(result.mode, 'CONTROLLED_WRITE_UAT');
+});
+
 async function expectFailure(fetchImpl: typeof fetch, code: FeishuUatFailureCode) {
   const result = await runFeishuConfigCheck(env, fetchImpl);
   assert.equal(result.ok, false);

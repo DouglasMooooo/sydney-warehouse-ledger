@@ -18,7 +18,7 @@ export function OutboundReversalClient({ businessDate }: { businessDate: string 
     try {
       const response = await fetch('/api/warehouse/outbound/reversal', {
         method: 'POST', headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ mode, date, shNo }),
+        body: JSON.stringify({ mode, date, shNo, ...(mode === 'confirm' ? { commandId: preview?.commandId } : {}) }),
       });
       const payload = await response.json() as ApiResponse<OutboundReversalPreview & { rows?: number[] }>;
       if (!payload.ok) throw new Error(`${payload.error.code} · ${payload.error.message}`);
@@ -45,7 +45,7 @@ export function OutboundReversalClient({ businessDate }: { businessDate: string 
     {preview && <>
       <div className="reversal-summary"><strong>{preview.shNo}</strong><span>{preview.items.length} 条出库流水将恢复库存</span></div>
       <div className="table-wrap"><table><thead><tr><th>SN</th><th>SKU</th><th>数量</th><th>原库位</th><th>库存属性</th><th>原出库日</th></tr></thead><tbody>{preview.items.map((item) => <tr key={item.ledgerRow}><td>{item.sn || '非序列化'}</td><td>{item.sku}</td><td>{item.qty}</td><td>{item.fromLocation}</td><td>{item.stockCondition}</td><td>{item.outboundDate || '—'}</td></tr>)}</tbody></table></div>
-      <div className="batch-confirm-bar reversal-confirm"><span><WarningCircle size={18}/>这是库存写入操作，请核对 SH 和恢复库位。</span><button className="outline-danger" type="button" disabled={busy} onClick={resetPreview}>取消</button><button className="danger-write-button" type="button" disabled={busy} onClick={() => submit('confirm')}><ArrowCounterClockwise size={18}/>{busy ? '写入并复核中…' : `确认回撤 ${preview.items.length} 条`}</button></div>
+      <div className="batch-confirm-bar reversal-confirm"><span><WarningCircle size={18}/>这是库存写入操作，请核对 SH 和恢复库位。操作编号 {preview.commandId}</span><button className="outline-danger" type="button" disabled={busy} onClick={resetPreview}>取消</button><button className="danger-write-button" type="button" disabled={busy} onClick={() => submit('confirm')}><ArrowCounterClockwise size={18}/>{busy ? '写入并复核中…' : `确认回撤 ${preview.items.length} 条`}</button></div>
     </>}
   </section>;
 }

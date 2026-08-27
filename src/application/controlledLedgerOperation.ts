@@ -2,7 +2,7 @@ import type { WarehouseReadPort } from './contracts.js';
 import { assertBusinessMutationAllowed } from '../safety/readOnlyRelease.js';
 import type { ConfirmedOpenApiWrite, OpenApiLedgerWriter, WarehouseLedgerWriteContext } from '../feishu/openApiLedgerWriter.js';
 import { prepareInventoryWorkflow, type InventoryWorkflowInput, type InventoryWorkflowPreview } from './inventoryActionEngine.js';
-import { randomUUID } from 'node:crypto';
+import { newCommandId } from './commandId.js';
 
 export const CONTROLLED_UAT_ACTIONS = ['入库', '出库', '移库', '库存调增', '库存调减'] as const;
 export type ControlledOperationInput = InventoryWorkflowInput;
@@ -59,7 +59,7 @@ export async function previewControlledBatchTransfer(
     preview: await prepareInventoryWorkflow({ workflow: input.workflow, date: input.date, sn, toLocation: input.toLocation }, effectivePort),
   })));
   return {
-    commandId: input.commandId?.trim() || `CMD-${randomUUID()}`,
+    commandId: input.commandId?.trim() || newCommandId(),
     workflow: input.workflow,
     label: input.workflow === 'MOVE' ? '批量移库' : '批量维修完成',
     toLocation: input.toLocation.trim(),

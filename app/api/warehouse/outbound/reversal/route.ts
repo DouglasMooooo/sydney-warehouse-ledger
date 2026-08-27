@@ -10,12 +10,13 @@ export const runtime = 'nodejs';
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json() as OutboundReversalInput & { mode?: 'preview' | 'confirm' };
+    const body = await request.json() as OutboundReversalInput & { mode?: 'preview' | 'confirm'; commandId?: string };
     const auth = authenticateWarehouseRequest(request, 'WORK_ORDER_CONFIRM');
     expensiveOperationLimiter.check(`outbound-reversal:${auth.user.userId}`, 6, 60_000);
     const adapter = warehouseReadAdapterFromEnv();
+    if (body.mode === 'confirm' && !body.commandId) throw new TypeError('MISSING_COMMAND_ID');
     const result = body.mode === 'confirm'
-      ? await confirmOutboundReversal(body, adapter, openApiLedgerWriterFromEnv(), process.env, { createdBy: auth.user.userId })
+      ? await confirmOutboundReversal(body, adapter, openApiLedgerWriterFromEnv(), process.env, { createdBy: auth.user.userId, commandId: body.commandId! })
       : await previewOutboundReversal(body, adapter);
     return NextResponse.json(apiSuccess(result));
   } catch (error) {

@@ -56,4 +56,4 @@ test('true append ordering keeps historical gaps untouched and command identitie
   assert.equal(parseSystemLedgerMarker(`[SYSTEM_NATIVE] commandId=${one.commandId}; idempotencyKey=${one.idempotencyKey}; sourceFingerprint=${one.sourceFingerprint}`).commandId,one.commandId);
 });
 
-function headers(): string[] { const row=Array(29).fill(''); Object.assign(row,{0:'日期',1:'实际出库日',2:'动作',3:'ERP SH单号',4:'取货码',5:'容器码',6:'料号',9:'机器唯一码（SN）',10:'数量',11:'来源库位',12:'目标库位',13:'ERP仓库选择',15:'库存属性',21:'备注'}); return row; }
+function headers(): string[] { const row=Array(29).fill('辅助列'); Object.assign(row,{0:'日期',1:'实际出库日',2:'动作',3:'ERP SH单号',4:'取货码',5:'容器码',6:'料号',9:'机器唯一码（SN）',10:'数量',11:'来源库位',12:'目标库位',13:'ERP仓库选择',15:'库存属性',21:'备注'}); return row; }

@@ -18,6 +18,7 @@ export interface WorkOrderBatchPreview {
 }
 
 export interface MultiFileWorkOrderPreview {
+  commandId: string;
   mode: 'PREVIEW_ONLY';
   zeroWritesPerformed: true;
   documents: WorkOrderBatchPreview[];

@@ -4,7 +4,7 @@ import { prepareLedgerWrite } from '../ledger/typedWrite.js';
 import type { WarehouseReadPort } from './contracts.js';
 import { toRepairedGoodSn } from '../snResolver/resolver.js';
 import { isOperationalShNumber } from './shNumber.js';
-import { randomUUID } from 'node:crypto';
+import { newCommandId } from './commandId.js';
 
 export const INVENTORY_WORKFLOWS = [
   'PREPARE', 'OUTBOUND', 'RETURN_REPAIR', 'INBOUND', 'MOVE', 'REPAIR_COMPLETE',
@@ -187,7 +187,7 @@ export async function prepareInventoryWorkflow(input: InventoryWorkflowInput, po
     const validated = prepareLedgerWrite(row, true);
     if (!validated.ok) throw new TypeError(`LEDGER_VALIDATION_FAILED:${validated.errors.map((item) => item.code).join(',')}`);
   }
-  const commandId = input.commandId?.trim() || `CMD-${randomUUID()}`;
+  const commandId = input.commandId?.trim() || newCommandId();
   const preview: InventoryWorkflowPreview = { commandId, workflow: input.workflow, label: rule.label,
     ledgerAction: input.workflow === 'REPAIR_COMPLETE' ? '库存调减 + 库存调增' : rule.ledgerAction,
     inventoryEffect: rule.inventoryEffect, rows, warnings };

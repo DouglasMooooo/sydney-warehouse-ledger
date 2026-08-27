@@ -69,6 +69,11 @@ export function assertMainLedgerSchema(headers: readonly string[]): void {
       throw new Error(`OPERATIONAL_LEDGER_SCHEMA_MISMATCH:${column}`);
     }
   }
+  for (const column of PROTECTED_COLUMNS) {
+    if (!String(headers[columnToIndex(column)] ?? '').trim()) {
+      throw new Error(`OPERATIONAL_LEDGER_SCHEMA_MISMATCH:${column}`);
+    }
+  }
 }
 
 function columnToIndex(column: string): number {
