@@ -40,6 +40,7 @@ export function clientSafeError(error: unknown): ApiErrorContract {
     AUDIT_QUERY_REQUIRES_ONE_IDENTIFIER: 'SH 和 SN 请一次只查询一个，确保结果精确。',
     INVALID_AUDIT_DATE_RANGE: '开始日期不能晚于结束日期。',
     INVALID_AUDIT_LIMIT: '查询结果数量必须在 1 到 10000 之间。',
+    INVALID_INVENTORY_FILTER: '库存查询条件无效，请检查料号、机型、库位或库存属性。',
   };
   for (const [code, safeMessage] of Object.entries(workflowErrors)) {
     if (message.includes(code)) return { code, message: safeMessage };

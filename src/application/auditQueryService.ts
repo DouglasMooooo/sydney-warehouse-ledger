@@ -4,6 +4,7 @@ import { LiveMovementQueryService, ProjectedMovementRepository, type MovementDet
 import { ReplaySnContextService } from './queries/snContextService.js';
 import type { CurrentSnState } from '../domain/sn/types.js';
 import type { MovementValidationIssue } from '../domain/movement/types.js';
+import { getWmsSyncMonitor, type WmsSyncMonitor } from './wmsSyncMonitor.js';
 
 export interface AuditQueryInput {
   shNo?: string;
@@ -19,6 +20,7 @@ export interface LedgerAuditResult {
   records: MovementDetail[];
   issues: MovementValidationIssue[];
   currentSnState?: CurrentSnState;
+  wmsMonitor: WmsSyncMonitor;
   truncated: boolean;
 }
 
@@ -34,7 +36,7 @@ export class LiveLedgerAuditService {
     const records = ordered.slice(0, query.limit);
     const result: LedgerAuditResult = {
       source: 'LIVE_FEISHU_LEDGER', query: query.display, records,
-      issues: movements.issues, truncated: ordered.length > records.length,
+      issues: movements.issues, wmsMonitor: getWmsSyncMonitor(), truncated: ordered.length > records.length,
     };
     if (query.display.type === 'SN' && query.display.value) {
       result.currentSnState = await new ReplaySnContextService(repository).get(query.display.value).then((item) => item.currentState);

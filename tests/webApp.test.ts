@@ -230,11 +230,16 @@ test('audit UI exposes exact SH/SN search and reconciliation export without raw 
   assert(audit.includes('按 SN'));
   assert(audit.includes("/api/warehouse/audit?"));
   assert(audit.includes('scope=reconciliation'));
+  assert(audit.includes('实时库存查询'));
+  assert(audit.includes('/api/warehouse/inventory/query?'));
   assert(route.includes('LiveLedgerAuditService'));
   assert(!route.includes('FEISHU_APP_SECRET'));
   assert(exportRoute.includes("scope') === 'reconciliation'"));
   assert(exportRoute.includes("'操作台账'"));
   assert(exportRoute.includes("'当前库存'"));
+  assert(exportRoute.includes("'WMS反写监控'"));
+  const inventoryRoute = readFileSync('app/api/warehouse/inventory/query/route.ts', 'utf8');
+  assert(inventoryRoute.includes('LiveInventoryQueryService'));
 });
 
 test('prepared location recommendation prioritizes sufficient FLEX-01 inventory', async () => {

@@ -19,6 +19,7 @@ test('audit query returns all SH fields and preserves ERP warehouse in the proje
   assert.equal(result.records.length, 2);
   assert(result.records.every((item) => item.shNo === 'SH-2608-001'));
   assert.equal(result.records[0]?.erpWarehouse, '悉尼物料仓');
+  assert.equal(result.wmsMonitor.state, 'NOT_CONFIGURED');
 });
 
 test('SN audit returns complete lifecycle and deterministic current state without fuzzy matching', async () => {

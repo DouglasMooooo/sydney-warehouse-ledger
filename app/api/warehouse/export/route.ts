@@ -31,8 +31,8 @@ async function reconciliationExport(adapter: ReturnType<typeof warehouseReadAdap
   const workbook = new ExcelJS.Workbook(); workbook.creator = 'Sydney Warehouse Operations'; workbook.created = new Date();
   const ledger = workbook.addWorksheet('操作台账');
   addTable(ledger,
-    ['业务日期','实际出库日','动作','Workflow','SH','Pickup Code','容器','SKU','机型','SN','数量','来源库位','目标库位','ERP 仓库','库存属性','备注','Movement ID','来源','校验状态'],
-    audit.records.map((item) => [item.businessDate,item.occurredAt??'',item.ledgerAction,item.workflow??'',item.shNo??'',item.pickupCode??'',item.containerCode??'',item.sku??'',item.displayName??'',item.sn??'',item.qty,item.fromLocation??'',item.toLocation??'',item.erpWarehouse??'',item.stockConditionAfter??item.stockConditionBefore??'',item.reason??'',item.movementId,item.origin,item.verificationStatus]),
+    ['业务日期','实际出库日','动作','Workflow','SH','Pickup Code','容器','SKU','机型','SN','数量','来源库位','目标库位','ERP 仓库','库存属性','备注','Movement ID','来源','校验状态','WMS 反写状态'],
+    audit.records.map((item) => [item.businessDate,item.occurredAt??'',item.ledgerAction,item.workflow??'',item.shNo??'',item.pickupCode??'',item.containerCode??'',item.sku??'',item.displayName??'',item.sn??'',item.qty,item.fromLocation??'',item.toLocation??'',item.erpWarehouse??'',item.stockConditionAfter??item.stockConditionBefore??'',item.reason??'',item.movementId,item.origin,item.verificationStatus,audit.wmsMonitor.state]),
   );
   const current = workbook.addWorksheet('当前库存');
   addTable(current, ['SKU','机型','SN','库位','容器','可用数量','库存属性'], inventory.map((item) => [item.sku,item.displayName??item.model??'',item.sn??'',item.location,item.container??'',item.availableQty,item.condition]));
@@ -43,6 +43,8 @@ async function reconciliationExport(adapter: ReturnType<typeof warehouseReadAdap
     ['截断',audit.truncated ? '是：请按日期分段导出。' : '否'],
     ['校验提示',audit.issues.length],
   ]);
+  const wms = workbook.addWorksheet('WMS反写监控');
+  addTable(wms, ['状态','已尝试写入','待监控操作数','说明'], [[audit.wmsMonitor.state, audit.wmsMonitor.writeAttempted ? '是' : '否', audit.records.length, audit.wmsMonitor.message]]);
   const buffer = await workbook.xlsx.writeBuffer();
   return new Response(new Uint8Array(buffer), { headers: { 'content-type':'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'content-disposition':`attachment; filename="sydney-warehouse-reconciliation-${date}.xlsx"`, 'cache-control':'no-store' } });
 }
