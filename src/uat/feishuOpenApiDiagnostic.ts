@@ -11,6 +11,7 @@ export interface FeishuDiagnosticEntry {
   ENDPOINT_NAME: string;
   TOKEN_TYPE: 'tenant_access_token';
   APP_ID_SUFFIX: string;
+  SPREADSHEET_TOKEN_SUFFIX: string;
   RESULT: 'PASS' | 'FAIL' | 'SKIPPED';
   DETAIL?: string;
 }
@@ -26,7 +27,8 @@ export async function runFeishuOpenApiReadDiagnostic(
   const token = env.FEISHU_SPREADSHEET_TOKEN?.trim();
   const mainSheetId = env.FEISHU_MAIN_SHEET_ID?.trim();
   const baselineSheetId = env.FEISHU_CURRENT_INVENTORY_SHEET_ID?.trim();
-  const base = (STEP: string, ENDPOINT_NAME: string): Omit<FeishuDiagnosticEntry, 'HTTP_STATUS' | 'FEISHU_CODE' | 'FEISHU_MSG' | 'REQUEST_ID' | 'RESULT'> => ({ STEP, ENDPOINT_NAME, TOKEN_TYPE: 'tenant_access_token', APP_ID_SUFFIX: suffix });
+  const tokenSuffix = token ? token.slice(-6) : 'MISSING';
+  const base = (STEP: string, ENDPOINT_NAME: string): Omit<FeishuDiagnosticEntry, 'HTTP_STATUS' | 'FEISHU_CODE' | 'FEISHU_MSG' | 'REQUEST_ID' | 'RESULT'> => ({ STEP, ENDPOINT_NAME, TOKEN_TYPE: 'tenant_access_token', APP_ID_SUFFIX: suffix, SPREADSHEET_TOKEN_SUFFIX: tokenSuffix });
   const output: FeishuDiagnosticEntry[] = [];
 
   const tokenProbe = await tokenRequest(env, fetchImpl, base('TENANT_TOKEN', 'auth/v3/tenant_access_token/internal'));
