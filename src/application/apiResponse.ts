@@ -55,6 +55,12 @@ export function clientSafeError(error: unknown): ApiErrorContract {
   if (message.includes('XLSX_NOT_SUPPORTED')) {
     return { code: 'XLSX_NOT_SUPPORTED', message: '当前仅支持文本原型，尚未启用 XLSX 上传。', field: 'sourceFileName' };
   }
+  if (message.includes('CURRENT_INVENTORY_AUTHORITY_UNVERIFIED')) {
+    return {
+      code: 'CURRENT_INVENTORY_AUTHORITY_UNVERIFIED',
+      message: '当前库存基线尚未完成权威配置，系统已阻止实时库存投影。',
+    };
+  }
   if (message.includes('UNSUPPORTED_CLIENT_FIELD')) {
     return { code: 'UNSUPPORTED_CLIENT_FIELD', message: '请求包含不受支持的字段。' };
   }
