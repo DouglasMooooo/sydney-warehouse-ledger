@@ -3,6 +3,7 @@ import type { DashboardSnapshot } from '../../../src/application/contracts';
 import { warehouseReadAdapterFromEnv } from '../../../src/feishu/warehouseReadAdapter';
 import { todayInSydney } from '../../../src/ledger/businessDate';
 import { authenticateWarehousePage } from '../../../src/auth/pageAuth';
+import { clientSafeError } from '../../../src/application/apiResponse';
 import Link from 'next/link';
 import { DownloadSimple } from '@phosphor-icons/react/dist/ssr';
 
@@ -11,11 +12,13 @@ export const dynamic = 'force-dynamic';
 export default async function DashboardPage() {
   const today = todayInSydney();
   let snapshot: DashboardSnapshot | undefined;
+  let readError: ReturnType<typeof clientSafeError> | undefined;
   try {
     await authenticateWarehousePage('DASHBOARD_READ');
     snapshot = await new LiveDashboardQueryService(warehouseReadAdapterFromEnv()).getSnapshot(today);
   } catch (error) {
     console.error('Dashboard source read failed', error);
+    readError = clientSafeError(error);
   }
   return (
     <>
@@ -23,7 +26,7 @@ export default async function DashboardPage() {
         <div><p className="eyebrow">OPERATIONS OVERVIEW</p><h2>Dashboard</h2><p>Sydney business date · {today}</p></div>
         <div className="report-actions"><Link href="/reports/weekly">查看周报</Link><Link href={`/api/warehouse/export?date=${today}`}><DownloadSimple size={17}/>导出 Excel</Link></div>
       </header>
-      {!snapshot ? <div className="notice error"><strong>系统读取失败</strong><br />请检查服务端飞书表格配置和工作表结构。页面不会使用缓存库存或静默回退。</div> : <DashboardContent snapshot={snapshot} />}
+      {!snapshot ? <div className="notice error"><strong>系统读取失败</strong><br />{readError?.code ?? 'SYSTEM_READ_FAILED'} · {readError?.message ?? '请联系管理员。'}<br />页面不会使用缓存库存或静默回退。</div> : <DashboardContent snapshot={snapshot} />}
     </>
   );
 }
