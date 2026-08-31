@@ -4,6 +4,18 @@ interface CachedToken { value: string; refreshAt: number; expiryAt: number }
 
 export class FeishuOpenApiError extends Error {
   readonly code = 'SYSTEM_READ_FAILED';
+  readonly feishuCode: number | undefined;
+  readonly feishuMsg: string | undefined;
+  readonly httpStatus: number | undefined;
+  readonly requestId: string | undefined;
+  constructor(message: string, details?: { feishuCode?: number | undefined; feishuMsg?: string | undefined; httpStatus?: number | undefined; requestId?: string | undefined }) {
+    super(message);
+    this.name = 'FeishuOpenApiError';
+    this.feishuCode = details?.feishuCode;
+    this.feishuMsg = details?.feishuMsg;
+    this.httpStatus = details?.httpStatus;
+    this.requestId = details?.requestId;
+  }
 }
 
 export class FeishuOpenApiClient {
@@ -36,7 +48,13 @@ export class FeishuOpenApiClient {
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
     });
     const responseBody = await parseJson(response);
-    if (!response.ok || responseBody.code !== 0) throw new FeishuOpenApiError(`Feishu ${method.toLowerCase()} failed (${responseBody.code ?? response.status}).`);
+    if (!response.ok || responseBody.code !== 0) {
+      const feishuCode = typeof responseBody.code === 'number' ? responseBody.code : undefined;
+      const feishuMsg = typeof responseBody.msg === 'string' ? responseBody.msg : undefined;
+      const requestId = response.headers.get('x-request-id') ?? response.headers.get('x-tt-logid') ?? undefined;
+      const detail = [feishuMsg, requestId ? `request_id=${requestId}` : undefined].filter(Boolean).join(' · ');
+      throw new FeishuOpenApiError(`Feishu ${method.toLowerCase()} failed (${feishuCode ?? response.status})${detail ? `: ${detail}` : '.'}`, { feishuCode, feishuMsg, httpStatus: response.status, requestId });
+    }
     return responseBody.data as T;
   }
 
@@ -48,7 +66,10 @@ export class FeishuOpenApiClient {
     });
     const body = await parseJson(response);
     if (!response.ok || body.code !== 0 || typeof body.tenant_access_token !== 'string' || typeof body.expire !== 'number' || body.expire <= 0) {
-      throw new FeishuOpenApiError(`Feishu token acquisition failed (${body.code ?? response.status}).`);
+      const requestId = response.headers.get('x-request-id') ?? response.headers.get('x-tt-logid') ?? undefined;
+      const feishuCode = typeof body.code === 'number' ? body.code : undefined;
+      const feishuMsg = typeof body.msg === 'string' ? body.msg : undefined;
+      throw new FeishuOpenApiError(`Feishu token acquisition failed (${feishuCode ?? response.status})${feishuMsg ? `: ${feishuMsg}` : '.'}`, { feishuCode, feishuMsg, httpStatus: response.status, requestId });
     }
     const acquiredAt = this.now();
     const expiryAt = acquiredAt + body.expire * 1000;

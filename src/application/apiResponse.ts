@@ -67,6 +67,10 @@ export function clientSafeError(error: unknown): ApiErrorContract {
       message: '当前库存表含公式，不能直接作为权威基线；请先冻结为纯数值快照。',
     };
   }
+  if (message.includes('Feishu ') && message.includes(' failed (')) {
+    const match = /Feishu [a-z]+ failed \((\d+)/i.exec(message);
+    return { code: 'FEISHU_API_REJECTED', message: `飞书接口拒绝了本次操作${match?.[1] ? `（code ${match[1]}）` : ''}，请检查服务端日志中的 request_id。` };
+  }
   if (message.includes('UNSUPPORTED_CLIENT_FIELD')) {
     return { code: 'UNSUPPORTED_CLIENT_FIELD', message: '请求包含不受支持的字段。' };
   }
