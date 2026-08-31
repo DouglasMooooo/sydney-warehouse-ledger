@@ -61,6 +61,12 @@ export function clientSafeError(error: unknown): ApiErrorContract {
       message: '当前库存基线尚未完成权威配置，系统已阻止实时库存投影。',
     };
   }
+  if (message.includes('CURRENT_INVENTORY_BASELINE_HAS_FORMULAS')) {
+    return {
+      code: 'CURRENT_INVENTORY_BASELINE_HAS_FORMULAS',
+      message: '当前库存表含公式，不能直接作为权威基线；请先冻结为纯数值快照。',
+    };
+  }
   if (message.includes('UNSUPPORTED_CLIENT_FIELD')) {
     return { code: 'UNSUPPORTED_CLIENT_FIELD', message: '请求包含不受支持的字段。' };
   }
