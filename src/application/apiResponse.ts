@@ -69,6 +69,9 @@ export function clientSafeError(error: unknown): ApiErrorContract {
   }
   if (message.includes('Feishu ') && message.includes(' failed (')) {
     const match = /Feishu [a-z]+ failed \((\d+)/i.exec(message);
+    if (message.includes('No permission')) {
+      return { code: 'FEISHU_WRITE_PERMISSION_REQUIRED', message: `飞书拒绝了写入权限${match?.[1] ? `（code ${match[1]}）` : ''}，请在开放平台补齐表格写入权限，并确认应用是目标表协作者。` };
+    }
     return { code: 'FEISHU_API_REJECTED', message: `飞书接口拒绝了本次操作${match?.[1] ? `（code ${match[1]}）` : ''}，请检查服务端日志中的 request_id。` };
   }
   if (message.includes('UNSUPPORTED_CLIENT_FIELD')) {
