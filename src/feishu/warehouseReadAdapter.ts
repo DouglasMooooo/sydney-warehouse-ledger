@@ -45,6 +45,8 @@ export interface FeishuWarehouseReadConfig {
 }
 
 export class FeishuWarehouseReadAdapter implements WarehouseReadPort, MovementReadPort {
+  private mainReadInFlight: Promise<TypedSheetData> | undefined;
+
   constructor(
     private readonly config: FeishuWarehouseReadConfig,
     private readonly reader: WarehouseSheetReader = new LarkCliWarehouseSheetReader(config.spreadsheetUrl),
@@ -332,10 +334,15 @@ export class FeishuWarehouseReadAdapter implements WarehouseReadPort, MovementRe
   }
 
   private readMain(): Promise<TypedSheetData> {
-    return this.reader.readTable({
+    // Deduplicate overlapping projections within one request. This is not a
+    // cross-request cache: the promise is cleared as soon as it settles.
+    if (this.mainReadInFlight) return this.mainReadInFlight;
+    this.mainReadInFlight = this.reader.readTable({
       sheetId: this.config.mainSheetId,
       noHeader: true,
     });
+    void this.mainReadInFlight.finally(() => { this.mainReadInFlight = undefined; });
+    return this.mainReadInFlight;
   }
 
   private readInventory(): Promise<TypedSheetData> {
