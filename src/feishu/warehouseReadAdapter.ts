@@ -240,6 +240,26 @@ export class FeishuWarehouseReadAdapter implements WarehouseReadPort, MovementRe
     return deriveTodayTasks(rows, asOf);
   }
 
+  async readOperationsBootstrap(asOf: BusinessDate): Promise<OperationsBootstrap> {
+    const started = Date.now();
+    const [main, inventory, validLocations] = await Promise.all([this.readMain(), this.readInventory(), this.readValidLocations()]);
+    const readMs = Date.now() - started;
+    const sourceType = this.config.currentInventoryAuthorityMode ?? 'UNKNOWN';
+    const effectiveAt = this.config.currentInventoryBaselineEffectiveAt ?? '';
+    assertAuthoritativeBaseline(sourceType, effectiveAt);
+    const ledgerRecords = main.data.slice(1).map((row, index) => toMovementLedgerRecord(row, index + 2)).filter((record) => record.action);
+    const snapshot = CURRENT_INVENTORY_PROJECTOR.project({ sourceType, effectiveAt, records: parseInventoryRecords(inventory).records }, MOVEMENT_PROJECTOR.projectLedgerRecords(ledgerRecords).movements);
+    const summary = summarizeLocations(locationRecordsFromCandidates(snapshot.records));
+    const byLocation = new Map(summary.summaries.map((item) => [item.location, item]));
+    const locations = [...validLocations].sort((left, right) => left.localeCompare(right)).map((location) => {
+      const item = byLocation.get(location) ?? { location, totalQty: 0, skuLines: [], containers: [] };
+      return { ...item, displayText: formatLocationSummary(location, item) };
+    });
+    const tasks = deriveTodayTasks(currentOperationalEntries(main).map(({ row, ledgerRow }) => toOperationalLedgerRow(row, ledgerRow)), asOf);
+    console.info(JSON.stringify({ diagnostic: 'OPERATIONS_BOOTSTRAP', readMs, projectionMs: Date.now() - started - readMs, locationCount: locations.length, pickupCount: tasks.awaitingPickup.length }));
+    return { locations, awaitingPickup: tasks.awaitingPickup };
+  }
+
   async readLocationSummaries(): Promise<{ locations: Array<LocationSummary & { displayText: string }>; issues: ReturnType<typeof summarizeLocations>['issues'] }> {
     const [snapshot, validLocations] = await Promise.all([this.currentInventorySnapshot(), this.readValidLocations()]);
     const result = summarizeLocations(locationRecordsFromCandidates(snapshot.records));
@@ -366,6 +386,11 @@ export class FeishuWarehouseReadAdapter implements WarehouseReadPort, MovementRe
     const location = columnIndex(table, ['库位编码（R-排-列-L/M/R）', '库位编码', 'Location']);
     return new Set(table.data.map((row) => text(row[location])).filter(Boolean));
   }
+}
+
+export interface OperationsBootstrap {
+  locations: Array<LocationSummary & { displayText: string }>;
+  awaitingPickup: TodayTaskSnapshot['awaitingPickup'];
 }
 
 function currentSerializedFromState(sn: string, state: CurrentSnState | undefined): CurrentSerializedInventory | undefined {
