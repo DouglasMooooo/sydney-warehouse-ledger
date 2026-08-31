@@ -26,7 +26,7 @@ export function OperationsClient({ businessDate, canAdjust, locations, awaitingP
   const rule = ACTION_RULES[workflow];
 
   function choose(next: InventoryWorkflow) {
-    setWorkflow(next); setBatchMode(undefined); setPreview(undefined); setPending(undefined); setState('idle'); setMessage(''); setOtherReason(false);
+    setWorkflow(next); setBatchMode(next === 'OUTBOUND' ? 'OUTBOUND' : undefined); setPreview(undefined); setPending(undefined); setState('idle'); setMessage(''); setOtherReason(false);
   }
 
   async function requestPreview(event: FormEvent<HTMLFormElement>) {

@@ -12,9 +12,19 @@ export default async function Page() {
   const adapter=warehouseReadAdapterFromEnv(); const businessDate=todayInSydney();
   let locations: Awaited<ReturnType<typeof warehouseDesignFixture>>; let tasks: { awaitingPickup: never[] } | Awaited<ReturnType<typeof adapter.readTodayTasks>>;
   try {
-    [locations,tasks] = process.env.WAREHOUSE_DESIGN_FIXTURE==='true'
-      ? [warehouseDesignFixture(),{awaitingPickup:[]}]
-      : [(await adapter.readLocationSummaries()).locations,await adapter.readTodayTasks(businessDate)];
+    if (process.env.WAREHOUSE_DESIGN_FIXTURE==='true') {
+      locations = warehouseDesignFixture();
+      tasks = { awaitingPickup: [] };
+    } else {
+      // These are independent read-only Feishu calls; run them concurrently so
+      // opening the operations console does not pay both network round trips.
+      const [locationSummary, todayTasks] = await Promise.all([
+        adapter.readLocationSummaries(),
+        adapter.readTodayTasks(businessDate),
+      ]);
+      locations = locationSummary.locations;
+      tasks = todayTasks;
+    }
   } catch (error) {
     const safe = clientSafeError(error);
     return <div className="notice error"><strong>业务操作暂不可用</strong><br />{safe.code} · {safe.message}</div>;
