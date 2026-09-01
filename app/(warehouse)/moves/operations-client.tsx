@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { ArrowRight, ArrowsLeftRight, CheckCircle, ClipboardText, Package, ShieldWarning, WarningCircle, Wrench } from '@phosphor-icons/react';
 import { ACTION_RULES, ADJUSTMENT_REASONS, type InventoryWorkflow, type InventoryWorkflowInput, type InventoryWorkflowPreview } from '../../../src/application/inventoryActionEngine';
 import { STOCK_CONDITIONS } from '../../../src/config/controlledValues';
@@ -22,34 +22,42 @@ export function OperationsClient({ businessDate, canAdjust, locations, awaitingP
   const [pending, setPending] = useState<InventoryWorkflowInput>();
   const [state, setState] = useState<'idle'|'previewing'|'ready'|'writing'|'done'|'error'>('idle');
   const [message, setMessage] = useState('');
+  const [busySince, setBusySince] = useState<number>();
+  const [busySeconds, setBusySeconds] = useState(0);
   const [otherReason, setOtherReason] = useState(false);
   const rule = ACTION_RULES[workflow];
+
+  useEffect(() => {
+    if (!busySince) { setBusySeconds(0); return; }
+    const timer = window.setInterval(() => setBusySeconds(Math.floor((Date.now() - busySince) / 1000)), 250);
+    return () => window.clearInterval(timer);
+  }, [busySince]);
 
   function choose(next: InventoryWorkflow) {
     setWorkflow(next); setBatchMode(next === 'OUTBOUND' ? 'OUTBOUND' : undefined); setPreview(undefined); setPending(undefined); setState('idle'); setMessage(''); setOtherReason(false);
   }
 
   async function requestPreview(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault(); setState('previewing'); setMessage(''); setPreview(undefined);
+    event.preventDefault(); setState('previewing'); setBusySince(Date.now()); setMessage(''); setPreview(undefined);
     const data = Object.fromEntries(new FormData(event.currentTarget).entries()) as Record<string,string>;
     const payload: InventoryWorkflowInput = { ...data, workflow, ...(data.qty ? { qty: Number(data.qty) } : {}) };
     try {
       const response = await fetch('/api/warehouse/operations/preview', { method:'POST', headers:{'content-type':'application/json'}, body:JSON.stringify(payload) });
       const result = await response.json() as ApiResponse<InventoryWorkflowPreview>;
       if (!result.ok) throw new Error(`${result.error.code} · ${result.error.message}`);
-      setPreview(result.data); setPending({ ...payload, commandId: result.data.commandId }); setState('ready');
-    } catch (reason) { setState('error'); setMessage(reason instanceof Error ? reason.message : '预览失败'); }
+      setPreview(result.data); setPending({ ...payload, commandId: result.data.commandId }); setState('ready'); setBusySince(undefined);
+    } catch (reason) { setState('error'); setBusySince(undefined); setMessage(reason instanceof Error ? reason.message : '预览失败'); }
   }
 
   async function confirmWrite() {
     if (!pending || !preview) return;
-    setState('writing'); setMessage('');
+    setState('writing'); setBusySince(Date.now()); setMessage('');
     try {
       const response = await fetch('/api/warehouse/operations/execute', { method:'POST', headers:{'content-type':'application/json'}, body:JSON.stringify(pending) });
       const result = await response.json() as ApiResponse<{rows:number[];status?:string}>;
       if (!result.ok) throw new Error(`${result.error.code} · ${result.error.message}`);
-      setState('done'); setMessage(result.data.status==='ALREADY_COMMITTED'?'该操作此前已经记录，无需重复提交。':`已写入并复核第 ${result.data.rows.join(', ')} 行`);
-    } catch (reason) { setState('error'); setMessage(reason instanceof Error ? reason.message : '写入失败'); }
+      setState('done'); setBusySince(undefined); setMessage(result.data.status==='ALREADY_COMMITTED'?'该操作此前已经记录，无需重复提交。':`已写入并复核第 ${result.data.rows.join(', ')} 行`);
+    } catch (reason) { setState('error'); setBusySince(undefined); setMessage(reason instanceof Error ? reason.message : '写入失败'); }
   }
 
   const sidebar = <OperationsSidebar workflow={workflow} batchMode={batchMode} canAdjust={canAdjust} choose={choose} chooseBatch={setBatchMode}/>;
@@ -70,6 +78,7 @@ export function OperationsClient({ businessDate, canAdjust, locations, awaitingP
         <div className="write-warning"><ClipboardText size={18}/><span>先读取并校验当前库存，再生成确认预览。只有再次确认后才新增流水，历史记录不会被修改。</span></div>
         <button className="execute-button" disabled={state==='previewing'||state==='writing'}><ArrowRight size={19}/>{state==='previewing'?'正在读取并校验…':`生成${rule.label}确认预览`}</button>
       </form>
+      {(state==='previewing'||state==='writing') && <div className="operation-progress" role="status"><span className="progress-spinner"/><div><strong>{state==='writing'?'正在写入飞书并执行写后复核':'正在读取库存并生成预览'}</strong><small>已等待 {busySeconds} 秒 · 请保持页面打开</small></div></div>}
       {state==='error' && <p className="write-result error"><WarningCircle size={18}/>{message}</p>}
       {state==='done' && <p className="write-result ok"><CheckCircle size={18}/>{message}</p>}
     </main>
