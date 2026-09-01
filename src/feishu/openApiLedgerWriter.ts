@@ -60,7 +60,10 @@ export class OpenApiLedgerWriter {
         valueRanges.push({ range: `${this.sheetId}!${cell.column}${row}:${cell.column}${row}`, values: [[cell.value]] });
         if (cell.valueType === 'date') dated.push({ range: `${this.sheetId}!${cell.column}${row}:${cell.column}${row}`, serial: cell.value as number });
       }));
-      for (const date of dated) await this.client.put(`/open-apis/sheets/v2/spreadsheets/${encodeURIComponent(this.spreadsheetToken)}/style`, { appendStyle: { range: date.range, style: { formatter: 'yyyy-mm-dd' } } });
+      // Feishu's formatter grammar uses uppercase `MM` for month.  Lowercase
+      // `mm` is interpreted as minutes and is rejected as `invalid formatter`
+      // (90204) by the style endpoint.
+      for (const date of dated) await this.client.put(`/open-apis/sheets/v2/spreadsheets/${encodeURIComponent(this.spreadsheetToken)}/style`, { appendStyle: { range: date.range, style: { formatter: 'yyyy-MM-dd' } } });
       try { await this.writeValueRanges(valueRanges); }
       catch (error) {
         const recovered = resolveCommittedRows((await this.reader.readTable({ sheetId: this.sheetId, noHeader: true })).data, identities);

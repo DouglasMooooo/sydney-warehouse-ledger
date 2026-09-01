@@ -25,7 +25,7 @@ test('OpenAPI writer preserves numeric date formatting and protected formulas en
   const result=await new OpenApiLedgerWriter('token','main',client,reader).append([{date:'2026-08-25',action:'入库',sku:'00123',qty:2,toLocation:'R1-1-1-L',stockCondition:'新机',remark:'UAT'}]);
   assert.deepEqual(result,{rows:[3],verified:true,reconciliation:'PASS'});
   assert.equal(puts.length,1);
-  assert.deepEqual(puts[0],{appendStyle:{range:'main!A3:A3',style:{formatter:'yyyy-mm-dd'}}});
+  assert.deepEqual(puts[0],{appendStyle:{range:'main!A3:A3',style:{formatter:'yyyy-MM-dd'}}});
   assert.equal(posts.length,1);
   const ranges=(posts[0] as {valueRanges:Array<{range:string;values:unknown[][]}>}).valueRanges;
   assert(ranges.some(item=>item.range==='main!A3:A3'&&typeof item.values[0]?.[0]==='number'));
