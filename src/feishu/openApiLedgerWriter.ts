@@ -61,7 +61,7 @@ export class OpenApiLedgerWriter {
         if (cell.valueType === 'date') dated.push({ range: `${this.sheetId}!${cell.column}${row}:${cell.column}${row}`, serial: cell.value as number });
       }));
       for (const date of dated) await this.client.put(`/open-apis/sheets/v2/spreadsheets/${encodeURIComponent(this.spreadsheetToken)}/style`, { appendStyle: { range: date.range, style: { formatter: 'yyyy-mm-dd' } } });
-      try { await this.client.post(`/open-apis/sheets/v2/spreadsheets/${encodeURIComponent(this.spreadsheetToken)}/values_batch_update`, { valueRanges }); }
+      try { await this.writeValueRanges(valueRanges); }
       catch (error) {
         const recovered = resolveCommittedRows((await this.reader.readTable({ sheetId: this.sheetId, noHeader: true })).data, identities);
         if (recovered.kind === 'all') return { rows: recovered.rows, verified: true, reconciliation: 'PASS', status: 'VERIFIED', movementIds: identities.map((item) => item.movementId) };
@@ -77,6 +77,23 @@ export class OpenApiLedgerWriter {
       return { rows, verified: true, reconciliation: 'PASS', ...(context ? { status: 'VERIFIED' as const, movementIds: identities.map((item) => item.movementId) } : {}) };
     }
     throw new Error('LEDGER_APPEND_CONTENTION');
+  }
+
+  /**
+   * The v2 batch endpoint rejects some valid single-cell ranges with 90204
+   * (valueRange is wrong) on the current Feishu tenant. Keep the efficient
+   * batch path, but fall back to the documented single-range PUT shape so a
+   * rejected batch cannot prevent an otherwise valid business write.
+   */
+  private async writeValueRanges(valueRanges: Array<{ range: string; values: unknown[][] }>): Promise<void> {
+    try {
+      await this.client.post(`/open-apis/sheets/v2/spreadsheets/${encodeURIComponent(this.spreadsheetToken)}/values_batch_update`, { valueRanges });
+    } catch (error) {
+      if (!(error instanceof Error) || !/90204/.test(error.message)) throw error;
+      for (const valueRange of valueRanges) {
+        await this.client.put(`/open-apis/sheets/v2/spreadsheets/${encodeURIComponent(this.spreadsheetToken)}/values`, { valueRange });
+      }
+    }
   }
 
   private async readRange(range: string, option: 'UnformattedValue' | 'FormattedValue' | 'Formula'): Promise<unknown[][]> {

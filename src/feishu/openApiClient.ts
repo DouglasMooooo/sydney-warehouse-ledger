@@ -50,7 +50,7 @@ export class FeishuOpenApiClient {
     const responseBody = await parseJson(response);
     if (!response.ok || responseBody.code !== 0) {
       const feishuCode = typeof responseBody.code === 'number' ? responseBody.code : undefined;
-      const feishuMsg = typeof responseBody.msg === 'string' ? responseBody.msg : undefined;
+      const feishuMsg = typeof responseBody.msg === 'string' ? redactSensitive(responseBody.msg) : undefined;
       const requestId = response.headers.get('x-request-id') ?? response.headers.get('x-tt-logid') ?? undefined;
       const detail = [feishuMsg, requestId ? `request_id=${requestId}` : undefined].filter(Boolean).join(' · ');
       throw new FeishuOpenApiError(`Feishu ${method.toLowerCase()} failed (${feishuCode ?? response.status})${detail ? `: ${detail}` : '.'}`, { feishuCode, feishuMsg, httpStatus: response.status, requestId });
@@ -76,6 +76,12 @@ export class FeishuOpenApiClient {
     this.token = { value: body.tenant_access_token, refreshAt: tokenRefreshAt(acquiredAt, body.expire), expiryAt };
     return this.token.value;
   }
+}
+
+function redactSensitive(value: string): string {
+  return value
+    .replace(/(private-token|app_secret|tenant_access_token)[-_A-Za-z0-9]*/gi, '[REDACTED]')
+    .replace(/Bearer\s+\S+/gi, 'Bearer [REDACTED]');
 }
 
 /** Refresh at 50–80% of TTL, always strictly before the server-declared expiry. */

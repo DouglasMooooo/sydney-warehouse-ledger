@@ -4,6 +4,7 @@ import { createMovementIdentity, nextAppendBusinessRow, OpenApiLedgerWriter, par
 import { assertMainLedgerSchema } from '../src/config/ledgerSchema.js';
 import { prepareLedgerWrite } from '../src/ledger/typedWrite.js';
 import type { WarehouseSheetReader } from '../src/feishu/sheetReader.js';
+import { FeishuOpenApiError } from '../src/feishu/openApiClient.js';
 import type { FeishuOpenApiClient } from '../src/feishu/openApiClient.js';
 
 test('OpenAPI writer preserves numeric date formatting and protected formulas end-to-end', async () => {
@@ -50,6 +51,27 @@ test('approved UAT required-stock-condition header remains a valid ledger schema
   const uatHeaders = headers();
   uatHeaders[15] = '库存属性（必填）';
   assert.doesNotThrow(() => assertMainLedgerSchema(uatHeaders));
+});
+
+test('falls back to single-range values PUT when Feishu batch write returns 90204', async () => {
+  const puts: unknown[] = [];
+  let rawReads = 0;
+  const written = Array(29).fill(''); written[0] = 46259; written[2] = '入库'; written[6] = '00123'; written[10] = 1; written[12] = 'R1-1-1-L'; written[15] = '新机'; written[21] = 'UAT';
+  const client = {
+    async get(_path: string, params: Record<string, string>) {
+      if (params.valueRenderOption === 'UnformattedValue') return { valueRange: { values: [rawReads++ === 0 ? Array(29).fill('') : written] } };
+      if (params.valueRenderOption === 'FormattedValue') { const formatted = [...written]; formatted[0] = '2026-08-25'; return { valueRange: { values: [formatted] } }; }
+      return { valueRange: { values: [Array(29).fill('')] } };
+    },
+    async post() { throw new FeishuOpenApiError('Feishu post failed (90204): valueRange is wrong'); },
+    async put(_path: string, body: unknown) { puts.push(body); return {}; },
+  } as unknown as FeishuOpenApiClient;
+  const reader: WarehouseSheetReader = { async readTable(input) { return { name: 'main', range: 'A1:AC2', columns: headers(), data: input.noHeader ? [headers(), ['2026-08-24']] : [['2026-08-24']], dtypes: {} }; }, async healthCheck() { return true; } };
+  const result = await new OpenApiLedgerWriter('token', 'main', client, reader).append([{ date: '2026-08-25', action: '入库', sku: '00123', qty: 1, toLocation: 'R1-1-1-L', stockCondition: '新机', remark: 'UAT' }]);
+  assert.equal(result.verified, true);
+  assert.ok(puts.length > 0);
+  const valuePut = puts.find((item) => (item as { valueRange?: unknown }).valueRange) as { valueRange: { range: string } } | undefined;
+  assert.equal(valuePut?.valueRange.range, 'main!A3:A3');
 });
 
 test('true append ordering keeps historical gaps untouched and command identities separate equal business commands', () => {
